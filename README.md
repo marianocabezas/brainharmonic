@@ -41,4 +41,5 @@ The whole project will be based on python 3.x coding. While other preprocessing 
 - [Nibabel](https://nipy.org/nibabel/) (nifti file loading for fMRI)
 - [scikit-learn](https://scikit-learn.org/stable/) (classical machine learning techniques such as clustering)
 - [MNE](https://mne.tools/stable/auto_tutorials/io/20_reading_eeg_data.html) (xEG data loading)
+- [Pooch](https://pypi.org/project/pooch/) (companion to MNE to download xEG datasets)
 - [Pyo AJAX](http://ajaxsoundstudio.com/software/pyo/) (signal processing library)
