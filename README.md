@@ -36,7 +36,7 @@ This project is purely open source. Therefore, we will be using publicly availab
 
 ## Collaborator set-up requirements
 The whole project will be based on python 3.x coding. While other preprocessing tools not based on python for fMRI/xEG can be used to clean or prepare the input signals for the model, the models will be implemented in python, preferrably using pytorch. Some useful python packages to start hacking include:
-- [Numpy](https://numpy.org/) and [Scipy](https://scipy.org/) (basic matric operations)
+- [Numpy](https://numpy.org/) and [Scipy](https://scipy.org/) (basic matrix operations)
 - [Pytorch](https://pytorch.org/docs/stable/tensors.html) (deep learning and differential methods)
 - [Nibabel](https://nipy.org/nibabel/) (nifti file loading for fMRI)
 - [scikit-learn](https://scikit-learn.org/stable/) (classical machine learning techniques such as clustering)
