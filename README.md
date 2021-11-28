@@ -1,6 +1,6 @@
 # Brainharmonic - Generating music from brain signal data using deep learning
 ## Description
-Wouldn't it be great to hear your thought in musical form? 
+Wouldn't it be great to hear your thoughts in musical form? 
 
 For years, neuroscientists have focused their research in understanding how the brain works. Non-invasive techniques, such as fMRI and xEG (electroencephalography variants), have been widely use to probe the brain to monitor neuron activity through imaging and electric signal acquistion. Thus, through these techniques we can study brain activity as a set of signals through time. Could we use that information to create songs?
 
