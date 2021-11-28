@@ -45,3 +45,4 @@ The whole project will be based on python 3.x coding. While other preprocessing 
 - [MNE](https://mne.tools/stable/auto_tutorials/io/20_reading_eeg_data.html) (xEG data loading)
 - [Pooch](https://pypi.org/project/pooch/) (companion to MNE to download xEG datasets)
 - [Pyo AJAX](http://ajaxsoundstudio.com/software/pyo/) (signal processing library)
+- [Jupyter](https://jupyter.org/) (not strictly necessary, but helpful for prototyping code)
