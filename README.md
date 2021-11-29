@@ -55,4 +55,4 @@ The whole project will be based on python 3.x coding. While other preprocessing 
 - [pygame](https://www.pygame.org/news) (needed to play midi files with music21)
 - [Pyo AJAX](http://ajaxsoundstudio.com/software/pyo/) (signal processing library)
 - [Jupyter](https://jupyter.org/) (not strictly necessary, but helpful for prototyping code)
-- [MuseScoe](https://musescore.org/) (play MIDIs from Jupyer Notebooks!)
+- [MuseScoe](https://musescore.org/) (show music sheets from MIDI files in your Jupyer Notebooks!)
