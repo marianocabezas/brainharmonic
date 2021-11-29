@@ -22,6 +22,10 @@ We would also like to include some repositories on works related to music genera
 
 This is by no means an exhaustive list and expertise from different points of view is valued.
 
+Extra resources on MIDI files and music theory:
+[MIDI note information](https://newt.phys.unsw.edu.au/jw/notes.html)
+[Reddit post on the middle MIDI note](https://www.reddit.com/r/musictheory/comments/8fwoti/why_does_middle_c_midi_note_60/)
+
 ## Methodology/Approach
 This project consists of a few different part, some of them optional depending on how the progress advances:
 - Processing fMRI sequences into a set of signals for each subject (Optional): fMRI is a highly-dimensional image sequence. For each subject thousands of voxels are acquired and each one of them represents a signal. To reduce the complexity, conventional techniques would need to be used to have a small set of signals that represent some major areas in the brain. This task would involve preprocessing the 4D sequence, parcellating the brain into regions, and obtaining a representative signal (mean) for each region. Conventional tools, such as [fmriprep](https://fmriprep.org/en/stable/) and [FreeSurfer](https://surfer.nmr.mgh.harvard.edu/)/[Fastsurfer](https://github.com/Deep-MI/FastSurfer) can help with that task. Since this is not a research project, rough, easy and fast solutions are welcomed for this step.
@@ -35,6 +39,7 @@ This project consists of a few different part, some of them optional depending o
 This project is purely open source. Therefore, we will be using publicly available data following open policies and the appropriate privacy and ethical regulations. For that reason, our data we will be gathered from [OpenNeuro](https://openneuro.org/). Ideally, we would like to use data from studies were groups are defined, or where subjects can be clustered, to represent different styles of music and to map them into a latent space based on similarity.
 
 Since this project deals both with brain signal files and musical files. In order to provide training samples, we have included MIDI files from the [DeepSymphony repository](https://github.com/Shaofanl/DeepSymphony).
+
 
 ## Collaborator set-up requirements
 The whole project will be based on python 3.x coding. While other preprocessing tools not based on python for fMRI/xEG can be used to clean or prepare the input signals for the model, the models will be implemented in python, preferrably using pytorch. Some useful python packages to start hacking include:
