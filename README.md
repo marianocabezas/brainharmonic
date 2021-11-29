@@ -23,8 +23,11 @@ We would also like to include some repositories on works related to music genera
 This is by no means an exhaustive list and expertise from different points of view is valued.
 
 Extra resources on MIDI files and music theory:
-[MIDI note information](https://newt.phys.unsw.edu.au/jw/notes.html)
-[Reddit post on the middle MIDI note](https://www.reddit.com/r/musictheory/comments/8fwoti/why_does_middle_c_midi_note_60/)
+- [MIDI note information](https://newt.phys.unsw.edu.au/jw/notes.html)
+- [Reddit post on the middle MIDI note](https://www.reddit.com/r/musictheory/comments/8fwoti/why_does_middle_c_midi_note_60/)
+- [MIDI tutorial](https://www.cs.cmu.edu/~music/cmsip/readings/MIDI%20tutorial%20for%20programmers.html)
+- [MIDI file standard](https://www.cs.cmu.edu/~music/cmsip/readings/MIDI%20tutorial%20for%20programmers.html)
+- [Frequency and pitch](https://www.animations.physics.unsw.edu.au/jw/frequency-pitch-sound.htm)
 
 ## Methodology/Approach
 This project consists of a few different part, some of them optional depending on how the progress advances:
