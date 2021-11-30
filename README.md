@@ -28,6 +28,7 @@ Extra resources on MIDI files and music theory:
 - [MIDI tutorial](https://www.cs.cmu.edu/~music/cmsip/readings/MIDI%20tutorial%20for%20programmers.html)
 - [MIDI file standard](https://www.cs.cmu.edu/~music/cmsip/readings/MIDI%20tutorial%20for%20programmers.html)
 - [Frequency and pitch](https://www.animations.physics.unsw.edu.au/jw/frequency-pitch-sound.htm)
+- [Introduction to tempo](https://courses.lumenlearning.com/musicappreciation_with_theory/chapter/introduction-to-tempo/)
 
 ## Methodology/Approach
 This project consists of a few different part, some of them optional depending on how the progress advances:
@@ -41,7 +42,7 @@ This project consists of a few different part, some of them optional depending o
 ## Data
 This project is purely open source. Therefore, we will be using publicly available data following open policies and the appropriate privacy and ethical regulations. For that reason, our data we will be gathered from [OpenNeuro](https://openneuro.org/). Ideally, we would like to use data from studies were groups are defined, or where subjects can be clustered, to represent different styles of music and to map them into a latent space based on similarity.
 
-Since this project deals both with brain signal files and musical files. In order to provide training samples, we have included MIDI files from the [DeepSymphony repository](https://github.com/Shaofanl/DeepSymphony).
+Since this project deals both with brain signal files and musical files. In order to provide training samples, we have included MIDI files from the [DeepSymphony repository](https://github.com/Shaofanl/DeepSymphony). ideally, we should be able to include the [Magenta datasets](https://magenta.tensorflow.org/datasets).
 
 
 ## Collaborator set-up requirements
