@@ -69,3 +69,4 @@ The whole project will be based on python 3.x coding. While other preprocessing 
 - [Pyo AJAX](http://ajaxsoundstudio.com/software/pyo/) (signal processing library)
 - [Jupyter](https://jupyter.org/) (not strictly necessary, but helpful for prototyping code)
 - [MuseScoe](https://musescore.org/) (show music sheets from MIDI files in your Jupyer Notebooks!)
+- [AudioLazy](https://pypi.org/project/audiolazy/) ()
