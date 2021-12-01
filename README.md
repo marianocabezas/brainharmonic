@@ -14,6 +14,7 @@ Furthermore, we would also like to look into linking brain signal from different
 While this is a novel idea and not many works deal with similar topics, we have collected a list of resources to take ideas that will help for each different task:
 [Carlos Hernandez-Olivan, Jose R. Beltran, "Music Composition with Deep Learning: A Review"](https://arxiv.org/abs/2108.12290)
 [Jing Lu, et al. "Scale-Free Brain-Wave Music from Simultaneously EEG and fMRI Recordings"](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0049773)
+[Sageev Oore, et al. "This Time with Feeling: Learning Expressive Musical Performance"](https://arxiv.org/abs/1808.03715)
 
 We would also like to include some repositories on works related to music generation:
 [Synthesizer](https://github.com/irmen/synthesizer)
@@ -29,6 +30,7 @@ Extra resources on MIDI files and music theory:
 - [MIDI file standard](https://www.cs.cmu.edu/~music/cmsip/readings/MIDI%20tutorial%20for%20programmers.html)
 - [Frequency and pitch](https://www.animations.physics.unsw.edu.au/jw/frequency-pitch-sound.htm)
 - [Introduction to tempo](https://courses.lumenlearning.com/musicappreciation_with_theory/chapter/introduction-to-tempo/)
+- [MIDI programs](https://en.wikipedia.org/wiki/General_MIDI)
 
 ## Methodology/Approach
 This project consists of a few different part, some of them optional depending on how the progress advances:
