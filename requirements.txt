@@ -1,0 +1,14 @@
+numpy
+scipy
+torch
+nibabel
+scikit-learn
+mne
+pyo
+jupyter
+mido
+pooch
+music21
+pygame
+tqdm
+pandas
