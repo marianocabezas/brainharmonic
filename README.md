@@ -44,11 +44,17 @@ This project consists of a few different part, some of them optional depending o
 
 ## Data
 This project is purely open source. Therefore, we will be using publicly available data following open policies and the appropriate privacy and ethical regulations. For that reason, our data we will be gathered from [OpenNeuro](https://openneuro.org/). Ideally, we would like to use data from studies were groups are defined, or where subjects can be clustered, to represent different styles of music and to map them into a latent space based on similarity.
+EEG datasets currently included as samples:
+- [Participants listening to different genres of music (ds003774)](https://openneuro.org/datasets/ds003774/versions/1.0.0)
+- [During sleep (ds003768)](https://openneuro.org/datasets/ds003768/versions/1.0.2)
+- [Emotions with naturalistic stimuli (ds003751)](https://openneuro.org/datasets/ds003751/versions/1.0.3)
+
+
 
 Since this project deals both with brain signal files and musical files. In order to provide training samples, we have included MIDI files from the [DeepSymphony repository](https://github.com/Shaofanl/DeepSymphony). ideally, we should be able to include the [Magenta datasets](https://magenta.tensorflow.org/datasets).
 
 
-## Collaborator set-up requirements
+## Collaborator set-up requirementsgit clone
 The whole project will be based on python 3.x coding. While other preprocessing tools not based on python for fMRI/xEG can be used to clean or prepare the input signals for the model, the models will be implemented in python, preferrably using pytorch. Some useful python packages to start hacking include:
 - [Numpy](https://numpy.org/) and [Scipy](https://scipy.org/) (basic matrix operations)
 - [Bottleneck](https://bottleneck.readthedocs.io/) (moving window operations, useful for timeseries)

@@ -6,7 +6,7 @@ import numpy as np
 from base import BaseModel
 
 
-class MusicTransformer(nn.Module):
+class MusicTransformer(BaseModel):
     """
         Transformer architecture for motifs inspired by
         C.-Z. A. Huang, A. Vaswani, J. Uszkoreit, N. Shazeer,
@@ -15,95 +15,109 @@ class MusicTransformer(nn.Module):
         "Music Transformer"
         https://arxiv.org/abs/1809.04281
     """
+    def __init__(
+        self,
+        att_filters=None,
+        device=torch.device(
+            "cuda:0" if torch.cuda.is_available() else "cpu"
+        ),
+        channels=128,
+        verbose=0,
+    ):
+        super().__init__()
+        self.init = False
+        # Init values
+        if att_filters is None:
+            self.att_filters = [64, 32, 16]
+        else:
+            self.att_filters = att_filters
+        self.epoch = 0
+        self.t_train = 0
+        self.t_val = 0
+        self.device = device
+        encoder_channels = [channels] + self.att_filters
 
-    class SimpleResNet(BaseModel):
-        def __init__(
-            self,
-            att_filters=None,
-            device=torch.device(
-                "cuda:0" if torch.cuda.is_available() else "cpu"
-            ),
-            channels=30,
-            verbose=0,
-        ):
-            super().__init__()
-            self.init = False
-            # Init values
-            if att_filters is None:
-                self.att_filters = [64, 32, 16]
-            else:
-                self.att_filters = att_filters
-            self.epoch = 0
-            self.t_train = 0
-            self.t_val = 0
-            self.device = device
-            encoder_channels = [channels] + self.att_filters[:-1]
+        # <Parameter setup>
+        self.encoder = nn.ModuleList([
+            nn.Sequential(
+                MultiheadedAttention(f_in, f_out),
+                nn.BatchNorm1d(f_out)
+            )
+            for f_in, f_out in zip(
+                encoder_channels[:-1], encoder_channels[1:]
+            )
+        ])
+        self.decoder = nn.ModuleList([
+            nn.Sequential(
+                MultiheadedAttention(f_in, f_out),
+                nn.BatchNorm1d(f_out)
+            )
+            for f_in, f_out in zip(
+                self.att_filters[:0:-1], self.att_filters[-2::-1]
+            )
+        ])
+        self.final = MultiheadedAttention(self.att_filters[0], channels)
 
-            # <Parameter setup>
-            self.encoder = nn.ModuleList([
-                nn.Sequential(
-                    MultiheadedAttention(f_in, f_out),
-                    nn.BatchNorm1d(f_out)
+        # <Loss function setup>
+        self.train_functions = [
+            {
+                'name': 'xentropy',
+                'weight': 1,
+                'f': lambda p, t: F.binary_cross_entropy_with_logits(
+                    p, t.type_as(p).to(p.device),
                 )
-                for f_in, f_out in zip(
-                    encoder_channels[:-1], encoder_channels[1:]
-                )
-            ])
-            self.decoder = nn.ModuleList([
-                nn.Sequential(
-                    MultiheadedAttention(f_in, f_out),
-                    nn.BatchNorm1d(f_out)
-                )
-                for f_in, f_out in zip(
-                    self.att_filters[:0:-1], self.att_filters[-2::-1]
-                )
-            ])
-            self.final = MultiheadedAttention(self.att_filters[-1], channels)
+            }
+        ]
 
-            # <Loss function setup>
-            self.train_functions = [
-                {
-                    'name': 'xentropy',
-                    'weight': 1,
-                    'f': lambda p, t: F.binary_cross_entropy_with_logits(
-                        p, t.type_as(p).to(p.device),
-                    )
-                }
-            ]
-
-            self.val_functions = [
-                {
-                    'name': 'xent',
-                    'weight': 0,
-                    'f': lambda p, t: F.binary_cross_entropy_with_logits(
-                        p, t.type_as(p).to(p.device)
-                    )
-                },
-            ]
-
-            # <Optimizer setup>
-            # We do this last step after all parameters are defined
-            model_params = filter(lambda p: p.requires_grad, self.parameters())
-            self.optimizer_alg = torch.optim.Adam(model_params)
-            if verbose > 1:
-                print(
-                    'Network created on device {:} with training losses '
-                    '[{:}] and validation losses [{:}]'.format(
-                        self.device,
-                        ', '.join([tf['name'] for tf in self.train_functions]),
-                        ', '.join([vf['name'] for vf in self.val_functions])
-                    )
+        self.val_functions = [
+            {
+                'name': 'xent',
+                'weight': 1,
+                'f': lambda p, t: F.binary_cross_entropy_with_logits(
+                    p, t.type_as(p).to(p.device)
                 )
+            },
+        ]
 
-        def forward(self, data):
-            for e_tf in self.encoder:
-                e_tf.to(self.device)
-                data = e_tf(data)
-            for d_tf in self.decoder:
-                d_tf.to(self.device)
-                data = d_tf(data)
-            self.final.to(self.device)
-            return self.final(data)
+        # <Optimizer setup>
+        # We do this last step after all parameters are defined
+        model_params = filter(lambda p: p.requires_grad, self.parameters())
+        self.optimizer_alg = torch.optim.Adam(model_params)
+        if verbose > 1:
+            print(
+                'Network created on device {:} with training losses '
+                '[{:}] and validation losses [{:}]'.format(
+                    self.device,
+                    ', '.join([tf['name'] for tf in self.train_functions]),
+                    ', '.join([vf['name'] for vf in self.val_functions])
+                )
+            )
+
+    def forward(self, data):
+        for e_tf in self.encoder:
+            e_tf.to(self.device)
+            data = e_tf(data)
+        for d_tf in self.decoder:
+            d_tf.to(self.device)
+            data = d_tf(data)
+        self.final.to(self.device)
+        return self.final(data)
+
+    def next_motif(self, motif):
+        tensor_motif = torch.from_numpy(
+            np.expand_dims(motif, axis=0)
+        ).to(self.device)
+        next_motif = torch.sigmoid(self(tensor_motif))
+
+        return next_motif[0].cpu().numpy()
+
+    def song(self, motif, n_motifs):
+        song_list = [motif]
+        for _ in range(n_motifs):
+            motif = self.next_motif(motif)
+            song_list.append(motif)
+
+        return np.concatenate(song_list, axis=1)
 
 
 class MultiheadedAttention(nn.Module):
@@ -158,9 +172,9 @@ class SelfAttention(nn.Module):
     ):
         super().__init__()
         self.features = att_features
-        self.map_key = nn.Linear(in_features, att_features)
-        self.map_query = nn.Linear(in_features, att_features)
-        self.map_value = nn.Linear(in_features, att_features)
+        self.map_key = nn.Conv1d(in_features, att_features, 1)
+        self.map_query = nn.Conv1d(in_features, att_features, 1)
+        self.map_value = nn.Conv1d(in_features, att_features, 1)
         self.norm = norm
 
     def forward(self, x):
