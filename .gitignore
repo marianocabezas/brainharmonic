@@ -90,3 +90,6 @@ ENV/
 
 # pyCharm
 .idea/
+
+# EEG samples
+samples/eeg

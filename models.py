@@ -25,7 +25,6 @@ class MusicTransformer(BaseModel):
         verbose=0,
     ):
         super().__init__()
-        self.init = False
         # Init values
         if att_filters is None:
             self.att_filters = [64, 32, 16]
@@ -109,7 +108,7 @@ class MusicTransformer(BaseModel):
         ).to(self.device)
         next_motif = torch.sigmoid(self(tensor_motif))
 
-        return next_motif[0].cpu().numpy()
+        return next_motif[0].detach().cpu().numpy()
 
     def song(self, motif, n_motifs):
         song_list = [motif]

@@ -12,3 +12,4 @@ music21
 pygame
 tqdm
 pandas
+audiolazy
