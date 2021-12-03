@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from math import floor
 import random
-import collections
 
 # parameters
 number_of_notes_in_motif = 5
@@ -16,8 +15,7 @@ number_of_notes_in_motif = 5
 # artifact removal
 
 # GENERATE NOTES
-
-def find_most_dominant_freg(signal):
+def find_most_dominant_freq(signal):
     # apply FFT and take absolute value
     f = abs(np.fft.fft(signal))
 
@@ -44,7 +42,7 @@ def generate_notes(raw_signal, number_of_notes_in_motif):
     mean_signal_cross_channels = np.mean(raw_signal, axis=0)
 
     # find most dominant freg on the whole signal sequence
-    most_dominant_freq = find_most_dominant_freg(mean_signal_cross_channels)
+    most_dominant_freq = find_most_dominant_freq(mean_signal_cross_channels)
 
     # map to a relevant range of notes - the higher the frequency, the higher the note.
     # From this note we identify a corresponding range of 12 notes with this note as the centre
