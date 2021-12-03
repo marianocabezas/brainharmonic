@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from math import floor
 import random
+import collections
 
 # parameters
 number_of_notes_in_motif = 5
@@ -50,12 +51,29 @@ def generate_notes(raw_signal, number_of_notes_in_motif):
     corresponding_note = floor(most_dominant_freq * 128)
     min_note_in_motif = max(0, min(corresponding_note - 6, 115))
 
+    sds = [] #array of standard deviation for each segment
+    sd = np.std(mean_signal_cross_channels)
+
     # generate the note for each sequence
     for i in range(number_of_notes_in_motif):
         segment_i = np.array_split(mean_signal_cross_channels, number_of_notes_in_motif)[i]
         most_dominant_freq_in_segment = find_most_dominant_freg(segment_i)
         note_for_segment = floor(min_note_in_motif + most_dominant_freq_in_segment * 12)
         notes.append(note_for_segment)
+        sd_signal_strength = np.std(segment_i)
+        sds.append(sd_signal_strength)
+
+    #if the signal is too static and there's only one or two notes in the whole motif,
+    # generate the sequence around on the dominant note, with the distance of the surrounding notes proportional to the standard deviation of the sequence
+    most_frequent_note = max(notes, key=notes.count)
+    if notes.count(most_frequent_note)/len(notes) > 0.5:
+        for i in range(number_of_notes_in_motif-1):
+            i = i + 1 #keep the first note as it is
+            print(i)
+            if sds[i] < sd:
+                notes[i] = max(0,notes[i] - floor(sds[i]/sd * 13))
+            elif sds[i] > sd:
+                notes[i] = min(127,notes[i] + floor(sds[i] / sd * 13))
 
     return notes
 
@@ -125,7 +143,7 @@ def add_ending_note_for_long_motif(notes):
 # clustering for timbre groups
 
 # testing
-subjects = [4]
+subjects = range(10)
 for subject in subjects:
     subject = subject + 1
     print("Subject %s" %subject)
