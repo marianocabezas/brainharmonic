@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(".")
 import numpy as np
 import mne
 from mne.datasets import eegbci
@@ -7,6 +10,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from math import floor
 import random
+from eeg_midi import File
+from eeg_midi import Track
+from eeg_midi import Note
+
+path = 'samples/music/motifs'
+#if not os.path.exist(path):
+#    os.mkdir(path)
 
 # parameters
 number_of_notes_in_motif = 5
@@ -55,7 +65,7 @@ def generate_notes(raw_signal, number_of_notes_in_motif):
     # generate the note for each sequence
     for i in range(number_of_notes_in_motif):
         segment_i = np.array_split(mean_signal_cross_channels, number_of_notes_in_motif)[i]
-        most_dominant_freq_in_segment = find_most_dominant_freg(segment_i)
+        most_dominant_freq_in_segment = find_most_dominant_freq(segment_i)
         note_for_segment = floor(min_note_in_motif + most_dominant_freq_in_segment * 12)
         notes.append(note_for_segment)
         sd_signal_strength = np.std(segment_i)
@@ -141,11 +151,13 @@ def add_ending_note_for_long_motif(notes):
 # clustering for timbre groups
 
 # testing
-subjects = range(10)
+subjects = range(108)
+runs = [1]
+tickspeed = 480
+
 for subject in subjects:
     subject = subject + 1
     print("Subject %s" %subject)
-    runs = [5]  # use only hand and feet motor imagery runs
 
     # Get data and locate in to given path
     files = eegbci.load_data(subject, runs, '../datasets/')
@@ -154,9 +166,24 @@ for subject in subjects:
     raw_obj = concatenate_raws(raws)
     open_eyes_data = raw_obj.get_data()
 
+    midi_file = File(tickspeed=tickspeed)
+    track_name = "subject" + str(subject) + "_run" + str(runs)
+    track = midi_file.add_track(track_name)
+
     notes = generate_notes(open_eyes_data,number_of_notes_in_motif)
     print("Notes: ",notes)
     velocities = generate_velocities(open_eyes_data,number_of_notes_in_motif)
     print("Velocities: ", velocities)
     durations = generate_durations(open_eyes_data,number_of_notes_in_motif)
     print("Durations: ",durations)
+
+    cumulative_time = np.cumsum(durations[0])
+    cumulative_time = cumulative_time * tickspeed
+    cumulative_time = [int(x) for x in cumulative_time]
+    print("Cumulative time: ",cumulative_time)
+
+    for i in range(number_of_notes_in_motif):
+        track.add_note(note=notes[i],time=cumulative_time[i],length=durations[0][i],velocity=velocities[i])
+
+    file_name = path + "/subject" + str(subject) + "_run" + str(runs[0]) + ".mid"
+    midi_file.save(file_name)
