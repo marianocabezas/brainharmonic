@@ -71,36 +71,16 @@ class Track(object):
             messages.append(note.on_message())
             messages.append(note.off_message())
 
-        messages.sort(key=lambda m: m.time, reverse=True)  # sort messages in increasing time order
+        #messages.sort(key=lambda m: m.time)  # sort messages in increasing time order
 
-        previous_pitch = 0
-        previous_time = 0
+        # previous_pitch = 0
+        # previous_time = 0
         for message in messages:
-
-            # clean any unnecessary pitchwheel messages, and messages with negative time values
-            if message.type == 'pitchwheel':
-                if message.pitch == previous_pitch:
-                    messages.remove(message)
-                    continue
-                else:
-                    previous_pitch = message.pitch
-            if message.time < 0:
-                messages.remove(message)
-                continue
-
-            # MIDI uses the delta time since the last message rather than absolute time, so we convert:
-            delta_time = message.time - previous_time
-
-            # MIDI can't support multiple messages in the same tick, so we push some messages forward a tick.
-            # this can cause weirdness if there are many simultaneous messages, but works okay otherwise.
-            if delta_time <= 0:
-                delta_time = 1
-            else:
-                previous_time = message.time
-
-            message.time = delta_time
-
-            track.append(message)
+            # clean any unnecessary pitchwheel messages
+             if message.type == 'pitchwheel':
+                 messages.remove(message)
+                 continue
+             track.append(message)
         return track
 
 
