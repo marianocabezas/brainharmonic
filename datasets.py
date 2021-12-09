@@ -63,7 +63,17 @@ class MotifDataset(Dataset):
                     if piano_roll.shape[1] > (self.motif_size + 1):
                         self.rolls.append(piano_roll)
 
-        print(len(self.rolls), 'piano rolls loaded')
+        max_notes = [
+            np.max(np.sum(roll, axis=0)).astype(int)
+            for roll in self.rolls
+        ]
+        print(
+            '{:d} piano rolls loaded with '
+            '[{:02d}, {:02d}] - {:5.3f} ± {:5.3f}'.format(
+                len(self.rolls), np.min(max_notes), np.max(max_notes),
+                np.mean(max_notes), np.std(max_notes)
+            )
+        )
         # self.samples = [
         #     (
         #         roll_i,
