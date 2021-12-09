@@ -30,7 +30,7 @@ class MusicTransformer(BaseModel):
             self.att_filters = [64, 32, 16]
         else:
             self.att_filters = att_filters
-        self.epoch = 0
+        self.epoch = None
         self.t_train = 0
         self.t_val = 0
         self.device = device
@@ -38,32 +38,28 @@ class MusicTransformer(BaseModel):
 
         # <Parameter setup>
         self.encoder = nn.ModuleList([
-            nn.Sequential(
-                MultiheadedAttention(f_in, f_out),
-                nn.BatchNorm1d(f_out)
-            )
+            MultiheadedAttention(f_in, f_out, f_in // 8)
             for f_in, f_out in zip(
                 encoder_channels[:-1], encoder_channels[1:]
             )
         ])
         self.decoder = nn.ModuleList([
-            nn.Sequential(
-                MultiheadedAttention(f_in, f_out),
-                nn.BatchNorm1d(f_out)
-            )
+            MultiheadedAttention(f_in, f_out, f_in // 4)
             for f_in, f_out in zip(
                 self.att_filters[:0:-1], self.att_filters[-2::-1]
             )
         ])
-        self.final = MultiheadedAttention(self.att_filters[0], channels)
+        self.final = MultiheadedAttention(
+            self.att_filters[0], channels, self.att_filters[0] // 2
+        )
 
         # <Loss function setup>
         self.train_functions = [
             {
-                'name': 'xentropy',
+                'name': 'xent',
                 'weight': 1,
                 'f': lambda p, t: F.binary_cross_entropy_with_logits(
-                    p, t.type_as(p).to(p.device),
+                    p, t,
                 )
             }
         ]
@@ -73,7 +69,35 @@ class MusicTransformer(BaseModel):
                 'name': 'xent',
                 'weight': 1,
                 'f': lambda p, t: F.binary_cross_entropy_with_logits(
-                    p, t.type_as(p).to(p.device)
+                    p, t,
+                )
+            },
+            {
+                'name': 'mse',
+                'weight': 0,
+                'f': lambda p, t: F.mse_loss(
+                    torch.sigmoid(p), t,
+                )
+            },
+            {
+                'name': 'l1',
+                'weight': 0,
+                'f': lambda p, t: F.l1_loss(
+                    torch.sigmoid(p), t,
+                )
+            },
+            {
+                'name': '0mse',
+                'weight': 0,
+                'f': lambda p, t: F.mse_loss(
+                    torch.zeros_like(t).to(t.device), t,
+                )
+            },
+            {
+                'name': '0l1',
+                'weight': 0,
+                'f': lambda p, t: F.l1_loss(
+                    torch.zeros_like(t).to(t.device), t,
                 )
             },
         ]
@@ -81,7 +105,7 @@ class MusicTransformer(BaseModel):
         # <Optimizer setup>
         # We do this last step after all parameters are defined
         model_params = filter(lambda p: p.requires_grad, self.parameters())
-        self.optimizer_alg = torch.optim.Adam(model_params)
+        self.optimizer_alg = torch.optim.Adam(model_params, lr=1e-5)
         if verbose > 1:
             print(
                 'Network created on device {:} with training losses '
@@ -100,21 +124,27 @@ class MusicTransformer(BaseModel):
             d_tf.to(self.device)
             data = d_tf(data)
         self.final.to(self.device)
-        return self.final(data)
+        data = self.final(data)
+        return torch.sum(data, dim=-1, keepdim=True)
 
-    def next_motif(self, motif):
-        tensor_motif = torch.from_numpy(
-            np.expand_dims(motif, axis=0)
-        ).to(self.device)
-        next_motif = torch.sigmoid(self(tensor_motif))
+    def next_beat(self, motif):
+        self.eval()
+        with torch.no_grad():
+            tensor_motif = torch.from_numpy(
+                np.expand_dims(motif, axis=0)
+            ).to(self.device)
+            next_beat = torch.sigmoid(self(tensor_motif))
+            np_beat = next_beat[0].detach().cpu().numpy()
+            np_beat[np.argsort(np_beat)[:-6]] = 0
 
-        return next_motif[0].detach().cpu().numpy()
+        return np_beat
 
-    def song(self, motif, n_motifs):
+    def song(self, motif, n_beats):
         song_list = [motif]
-        for _ in range(n_motifs):
-            motif = self.next_motif(motif)
-            song_list.append(motif)
+        for _ in range(n_beats):
+            note = self.next_beat(motif)
+            motif = np.concatenate([motif, note], axis=-1)
+            song_list.append(note)
 
         return np.concatenate(song_list, axis=1)
 
@@ -129,8 +159,8 @@ class MultiheadedAttention(nn.Module):
     """
 
     def __init__(
-            self, in_features, att_features, heads=8,
-            norm=partial(torch.softmax, dim=1),
+            self, in_features, att_features, heads=32,
+            norm=partial(torch.softmax, dim=-1),
     ):
         super().__init__()
         assert att_features % heads == 0,\
@@ -140,14 +170,19 @@ class MultiheadedAttention(nn.Module):
         self.out_features = att_features
         self.features = att_features // heads
         self.sa_blocks = nn.ModuleList([
-            SelfAttention(
-                in_features, self.features, norm
+            nn.Sequential(
+                SelfAttention(
+                    in_features, self.features, norm
+                ),
+                nn.ReLU(),
+                # nn.InstanceNorm1d(self.features)
             )
             for _ in range(self.blocks)
         ])
         self.final_block = nn.Sequential(
             nn.Conv1d(att_features, att_features, 1),
-            nn.ReLU(att_features),
+            nn.ReLU(),
+            # nn.InstanceNorm1d(self.features),
             nn.Conv1d(att_features, att_features, 1)
         )
 
@@ -177,14 +212,20 @@ class SelfAttention(nn.Module):
         self.norm = norm
 
     def forward(self, x):
+        # key = F.instance_norm(self.map_key(x))
         key = self.map_key(x)
+        # query = F.instance_norm(self.map_query(x))
         query = self.map_query(x)
         value = self.map_value(x)
 
-        att = torch.bmm(key.transpose(1, 2), query)
-        att_map = self.norm(
-            att.flatten(1) / np.sqrt(self.features)
-        ).view_as(att)
-        self_att = torch.bmm(value, att_map)
+        seq_range = torch.arange(0, x.shape[-1])
+        att = torch.bmm(query.transpose(1, 2), key)
+        x_cord, y_cord = torch.meshgrid(seq_range, seq_range)
+        s_rel = -torch.abs(x_cord - y_cord).type_as(x).to(x.device)
+        att_map = self.norm((att + s_rel) / np.sqrt(self.features))
+
+        masked_att = torch.triu(att_map)
+
+        self_att = torch.bmm(value, masked_att)
 
         return self_att

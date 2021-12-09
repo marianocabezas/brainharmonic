@@ -8,9 +8,9 @@ from utils import time_to_string
 
 class BaseModel(nn.Module):
     """"
-    This is the baseline model to be used for any of my networks. The idea
-    of this model is to create a basic framework that works similarly to
-    keras, but flexible enough.
+    This is the baseline model to be used for any network. The idea
+    of this module is to create a basic framework that works similarly to
+    keras, but with more flexibility to mix things up.
     For that reason, I have "embedded" the typical pytorch main loop into a
     fit function and I have defined some intermediate functions and callbacks
     to alter the main loop. By itself, this model can train any "normal"
