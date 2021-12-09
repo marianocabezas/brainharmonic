@@ -77,10 +77,8 @@ class Track(object):
         # previous_time = 0
         for message in messages:
             # clean any unnecessary pitchwheel messages
-             if message.type == 'pitchwheel':
-                 messages.remove(message)
-                 continue
-             track.append(message)
+             if message.type != 'pitchwheel':
+                 track.append(message)
         return track
 
 
