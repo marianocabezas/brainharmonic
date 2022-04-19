@@ -94,4 +94,4 @@ ENV/
 # EEG samples
 samples/eeg
 samples/music
-weights/*
+weights
