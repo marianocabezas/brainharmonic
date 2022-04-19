@@ -52,6 +52,8 @@ EEG datasets currently included as samples:
 
 
 Since this project deals both with brain signal files and musical files. In order to provide training samples, we have included MIDI files from the [DeepSymphony repository](https://github.com/Shaofanl/DeepSymphony). ideally, we should be able to include the [Magenta datasets](https://magenta.tensorflow.org/datasets).
+- [MAESTRO dataset](https://magenta.tensorflow.org/datasets/maestro#dataset)
+- [GiantMIDI dataset](https://github.com/bytedance/GiantMIDI-Piano)
 
 ## Data loading and pre-processing
 ### EEG data

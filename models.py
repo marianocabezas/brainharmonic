@@ -7,6 +7,45 @@ from copy import deepcopy
 from base import BaseModel
 
 
+def focal_loss(pred, target, alpha=0.75, gamma=2.0):
+    """
+    Function to compute the focal loss based on:
+    Tsung-Yi Lin, Priya Goyal, Ross Girshick, Kaiming He, Piotr Dollár. "Focal
+    Loss for Dense Object Detection".
+    https://arxiv.org/abs/1708.02002
+    https://ieeexplore.ieee.org/document/8237586
+    :param pred: Predicted values. The shape of the tensor should be:
+     [n_batches, data_shape]
+    :param target: Ground truth values. The shape of the tensor should be:
+     [n_batches, data_shape]
+    :param alpha: Weighting parameter to avoid class imbalance (default 0.2).
+    :param gamma: Focusing parameter (default 2.0).
+    :return: Focal loss value.
+    """
+
+    m_bg = target == 0
+    m_fg = target > 0
+
+    if alpha is None:
+        alpha = float(torch.sum(m_bg)) / torch.numel(target)
+
+    alpha_fg = alpha
+    alpha_bg = 1 - alpha
+    pt_fg = pred[m_fg]
+    pt_bg = (1 - pred[m_bg])
+
+    bce = F.binary_cross_entropy_with_logits(pred, target, reduction='none')
+    bce_fg = bce[m_fg]
+    bce_bg = bce[m_bg]
+
+    focal_fg = alpha_fg * (1 - pt_fg).pow(gamma) * bce_fg
+    focal_bg = alpha_bg * (1 - pt_bg).pow(gamma) * bce_bg
+
+    focal = torch.cat([focal_fg, focal_bg])
+
+    return focal.mean()
+
+
 class MusicTransformer(BaseModel):
     """
         Transformer architecture for motifs inspired by
@@ -67,15 +106,16 @@ class MusicTransformer(BaseModel):
             {
                 'name': 'xent',
                 'weight': 1,
-                'f': lambda p, t: F.binary_cross_entropy_with_logits(
-                    1 - p, 1 - t,
+                # 'f': lambda p, t: F.binary_cross_entropy_with_logits(
+                'f': lambda p, t: focal_loss(
+                    p, t,
                 )
             },
             {
                 'name': 'l1',
                 'weight': 1,
                 'f': lambda p, t: F.l1_loss(
-                    1 - torch.sigmoid(p), 1 - t,
+                    torch.sigmoid(p), t,
                 )
             },
             # {
@@ -158,7 +198,7 @@ class MusicTransformer(BaseModel):
                 np.expand_dims(motif, axis=0)
             ).to(self.device)
             next_beat = torch.sigmoid(self(tensor_motif))
-            np_beat = next_beat[0].detach().cpu().numpy()
+            np_beat = next_beat[-1].detach().cpu().numpy()
 
         return np_beat
 
@@ -167,14 +207,15 @@ class MusicTransformer(BaseModel):
         for _ in range(n_beats):
             note = self.next_beat(motif)
             new_note = deepcopy(note)
-            new_note[np.argsort(note, axis=0)[:-6], :] = 0
-            new_note[np.argsort(note, axis=0)[:-7:-1], :] = 1
-            motif = np.concatenate([motif, new_note], axis=-1)
+            # new_note[np.argsort(note, axis=0)[:-6], :] = 0
+            # new_note[np.argsort(note, axis=0)[:-7:-1], :] = 1
+            motif = np.concatenate([motif, new_note > 0.5], axis=-1)
             # song_list.append(np.exp(note) / sum(np.exp(note)))
             note_sum = np.sum(np.max(note))
             norm_note = note / note_sum if note_sum > 0 else note
             song_list.append(
-                norm_note
+                # norm_note
+                note
             )
 
         return np.concatenate(song_list, axis=1)
@@ -218,7 +259,7 @@ class MultiheadedAttention(nn.Module):
 
     def forward(self, x):
         x = torch.cat([sa_i(x) for sa_i in self.sa_blocks], dim=1)
-        z = self.final_block(x)
+        z = self.final_block(x) + x
         return z
 
 
