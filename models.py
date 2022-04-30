@@ -235,9 +235,6 @@ class MultiheadedAttention(nn.Module):
             norm=partial(torch.softmax, dim=-1),
     ):
         super().__init__()
-        assert att_features % heads == 0,\
-            'The number of attention features must be divisible by ' \
-            'the number of blocks'
         self.blocks = heads
         self.out_features = att_features
         self.features = att_features // heads
@@ -255,11 +252,11 @@ class MultiheadedAttention(nn.Module):
             nn.GroupNorm(heads, self.features),
             nn.Conv1d(att_features, att_features, 1)
         )
-        self.final_block = nn.Conv1d(att_features, att_features, 1)
+        self.final_block = nn.Conv1d(self.features * heads, att_features, 1)
 
     def forward(self, x):
         x = torch.cat([sa_i(x) for sa_i in self.sa_blocks], dim=1)
-        z = self.final_block(x) + x
+        z = self.final_block(x)
         return z
 
 

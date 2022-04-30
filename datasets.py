@@ -4,13 +4,117 @@ import numpy as np
 from torch.utils.data.dataset import Dataset
 
 
+def shift_tokens(shift, bits=8, notes=32):
+    remainder = shift
+    tokens = []
+    for shift_bit in range(bits - 1, -1, -1):
+        token = np.zeros(2 * notes + bits)
+        token[2 * notes + shift_bit] = 1
+        n_tokens = remainder // 2 ** shift_bit
+        remainder = remainder - n_tokens * 2 ** shift_bit
+        tokens += n_tokens * [token]
+
+    return tokens
+
+
+def on_tokens(note_list, bits=8, notes=32):
+    tokens = []
+    for note in note_list:
+        token = np.zeros(2 * notes + bits)
+        token[note] = 1
+        tokens.append(token)
+
+    return tokens
+
+
+def off_tokens(note_list, bits=8, notes=32):
+    tokens = []
+    for note in note_list:
+        token = np.zeros(2 * notes + bits)
+        token[notes + note] = 1
+        tokens.append(token)
+
+    return tokens
+
+
+def roll_to_state(roll, bits=8):
+    notes = len(roll)
+    shift = 0
+    notes_active = np.array([])
+    token_list = []
+    for beat in roll.transpose():
+        if np.sum(beat) > 0:
+            played_notes = np.where(beat > 0)[0]
+            new_replayed = np.isin(played_notes, notes_active)
+            old_replayed = np.isin(notes_active, played_notes)
+            if new_replayed.all() and old_replayed.all():
+                # We are repeating everything
+                # print('Repeat', notes_active, played_notes, shift)
+                pass
+            else:
+                # Changes
+                on = played_notes[np.logical_not(new_replayed)]
+                off = notes_active[np.logical_not(old_replayed)]
+                # print(
+                #     'OFF', off, 'ON', on, 'Data', notes_active, old_replayed,
+                #     played_notes, new_replayed, shift
+                # )
+                token_list += shift_tokens(shift, bits, notes)
+                token_list += off_tokens(off, bits, notes)
+                token_list += on_tokens(on, bits, notes)
+                shift = 0
+            notes_active = played_notes
+        else:
+            if len(notes_active) == 0:
+                # Silence
+                # print('Silence', shift)
+                pass
+            else:
+                # Notes go off
+                # print('OFF', notes_active, shift)
+                token_list += shift_tokens(shift, bits, notes)
+                token_list += off_tokens(notes_active, bits, notes)
+                notes_active = np.array([])
+                shift = 0
+
+        shift += 1
+
+    token_list += shift_tokens(shift, bits, notes)
+
+    return np.stack(token_list, axis=1)
+
+
+def state_to_roll(states, bits=8, notes=32):
+    roll = []
+    active_notes = []
+    for state in states.transpose():
+        state_code = np.where(state)[0][0]
+        if state_code < notes:
+            # print('ON', state_code)
+            active_notes.append(state_code)
+        elif state_code < (2 * notes):
+            # print('OFF', state_code - notes)
+            active_notes.remove(state_code - notes)
+        else:
+            # print('Shift', 2 ** (state_code - 2 * notes))
+            shift = 2 ** (state_code - 2 * notes)
+            beat = np.zeros(notes)
+            for note in active_notes:
+                beat[note] = 1
+            roll += shift * [beat]
+
+    return np.stack(roll, axis=1)
+
+
 class MotifDataset(Dataset):
     def __init__(
-            self, paths=None, motif_size=64, notespbeat=12
+            self, paths=None, motif_size=64, notespbeat=12,
+            multitokens=True
     ):
         # Init
         if paths is None:
             paths = ['samples/music/jazz/', 'samples/music/classical/']
+        self.multitokens = multitokens
         self.motif_size = motif_size
         self.rolls = []
         min_len = self.motif_size + 1
@@ -112,6 +216,8 @@ class MotifDataset(Dataset):
 
         # roll = self.rolls[roll_i]
         roll = self.rolls[index]
+        if not self.multitokens:
+            roll = roll_to_state(roll)
         max_ini = roll.shape[1] - self.motif_size - 1
         data_ini = np.random.randint(0, max_ini)
         target_ini = data_ini + self.motif_size
