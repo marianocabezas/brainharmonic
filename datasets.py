@@ -109,7 +109,7 @@ def state_to_roll(states, bits=8, notes=32):
 class MotifDataset(Dataset):
     def __init__(
             self, paths=None, motif_size=64, notespbeat=12,
-            multitokens=True
+            bits=8, multitokens=True
     ):
         # Init
         if paths is None:
@@ -117,6 +117,7 @@ class MotifDataset(Dataset):
         self.multitokens = multitokens
         self.motif_size = motif_size
         self.rolls = []
+        self.bits = bits
         min_len = self.motif_size + 1
         beat = 0
         for path in paths:
@@ -180,6 +181,10 @@ class MotifDataset(Dataset):
                         max_notes = np.max(
                             np.sum(piano_roll, axis=0)
                         ).astype(int)
+                        if not self.multitokens:
+                            piano_roll = roll_to_state(
+                                piano_roll, bits=self.bits
+                            )
                         seq_len = piano_roll.shape[1]
                         if seq_len > min_len and max_notes < notespbeat:
                             self.rolls.append(piano_roll)
@@ -216,15 +221,15 @@ class MotifDataset(Dataset):
 
         # roll = self.rolls[roll_i]
         roll = self.rolls[index]
-        if not self.multitokens:
-            roll = roll_to_state(roll)
-        max_ini = roll.shape[1] - self.motif_size - 1
+        max_ini = roll.shape[1] - self.motif_size
         data_ini = np.random.randint(0, max_ini)
         target_ini = data_ini + self.motif_size
         # data = roll[:, input_slice].astype(np.float32)
         # target = roll[:, output_idx].astype(np.float32)
         data = roll[:, data_ini:target_ini].astype(np.float32)
         target = roll[:, target_ini:target_ini + 1].astype(np.float32)
+        if not self.multitokens:
+            target = np.argmax(target, axis=0)
 
         return data, target
 

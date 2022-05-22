@@ -74,31 +74,26 @@ class MusicTransformer(BaseModel):
         self.t_train = 0
         self.t_val = 0
         self.device = device
-        encoder_channels = [channels] + self.att_filters
 
         # <Parameter setup>
         self.encoder = nn.ModuleList([
             nn.Sequential(
-                MultiheadedAttention(f_in, f_out, f_in // 8),
+                MultiheadedAttention(channels, f_att, channels // 8),
                 nn.ReLU(),
-                nn.GroupNorm(f_out // 8, f_out),
+                nn.GroupNorm(channels // 8, channels),
             )
-            for f_in, f_out in zip(
-                encoder_channels[:-1], encoder_channels[1:]
-            )
+            for f_att in att_filters
         ])
         self.decoder = nn.ModuleList([
             nn.Sequential(
-                MultiheadedAttention(f_in, f_out, f_in // 4),
+                MultiheadedAttention(channels, f_att, channels // 4),
                 nn.ReLU(),
-                nn.GroupNorm(f_out // 4, f_out),
+                nn.GroupNorm(channels // 4, channels),
             )
-            for f_in, f_out in zip(
-                self.att_filters[:0:-1], self.att_filters[-2::-1]
-            )
+            for f_att in att_filters[:0:-1]
         ])
         self.final = MultiheadedAttention(
-            self.att_filters[0], channels, self.att_filters[0] // 2
+            self.att_filters[0], channels, self.att_filters[0] // 4
         )
 
         # <Loss function setup>
@@ -183,10 +178,10 @@ class MusicTransformer(BaseModel):
     def forward(self, data):
         for e_tf in self.encoder:
             e_tf.to(self.device)
-            data = e_tf(data)
+            data = e_tf(data) + data
         for d_tf in self.decoder:
             d_tf.to(self.device)
-            data = d_tf(data)
+            data = d_tf(data) + data
         self.final.to(self.device)
         data = self.final(data)
         return data[:, :, -1:]
@@ -232,27 +227,26 @@ class MultiheadedAttention(nn.Module):
 
     def __init__(
             self, in_features, att_features, heads=32,
-            norm=partial(torch.softmax, dim=-1),
+            masked=False, norm=partial(torch.softmax, dim=-1),
     ):
         super().__init__()
         self.blocks = heads
-        self.out_features = att_features
         self.features = att_features // heads
+        self.out_features = self.features * heads
         self.sa_blocks = nn.ModuleList([
             SelfAttention(
-                in_features, self.features, norm
+                in_features, self.features, masked, norm
             )
             for _ in range(self.blocks)
         ])
         self.final_block = nn.Sequential(
             nn.ReLU(),
-            nn.GroupNorm(heads, self.features),
-            nn.Conv1d(att_features, att_features, 1),
+            nn.GroupNorm(heads, self.out_features),
+            nn.Conv1d(self.out_features, self.out_features, 1),
             nn.ReLU(),
-            nn.GroupNorm(heads, self.features),
-            nn.Conv1d(att_features, att_features, 1)
+            nn.GroupNorm(heads, self.out_features),
+            nn.Conv1d(self.out_features, in_features, 1)
         )
-        self.final_block = nn.Conv1d(self.features * heads, att_features, 1)
 
     def forward(self, x):
         x = torch.cat([sa_i(x) for sa_i in self.sa_blocks], dim=1)
@@ -269,7 +263,7 @@ class SelfAttention(nn.Module):
     """
 
     def __init__(
-            self, in_features, att_features,
+            self, in_features, att_features, masked=False,
             norm=partial(torch.softmax, dim=2)
     ):
         super().__init__()
@@ -277,6 +271,7 @@ class SelfAttention(nn.Module):
         self.map_key = nn.Conv1d(in_features, att_features, 1)
         self.map_query = nn.Conv1d(in_features, att_features, 1)
         self.map_value = nn.Conv1d(in_features, att_features, 1)
+        self.masked = masked
         self.norm = norm
 
     def forward(self, x):
@@ -292,9 +287,11 @@ class SelfAttention(nn.Module):
         # s_rel = 1 - torch.abs(x_cord - y_cord).type_as(x).to(x.device)
         # snorm_rel = s_rel / x.shape[-1]
         # att_map = self.norm((att * snorm_rel) / np.sqrt(self.features))
-        masked_att = torch.triu(att)
-        # att_map = self.norm(att / np.sqrt(self.features))
-        att_map = self.norm(masked_att / np.sqrt(self.features))
+        if self.masked:
+            masked_att = torch.triu(att)
+            att_map = self.norm(masked_att / np.sqrt(self.features))
+        else:
+            att_map = self.norm(att / np.sqrt(self.features))
 
         self_att = torch.bmm(value, att_map)
 

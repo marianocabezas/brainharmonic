@@ -103,9 +103,12 @@ class BaseModel(nn.Module):
                 ]
                 batch_loss = sum(batch_losses)
                 if self.training:
-                    batch_loss.backward()
-                    self.optimizer_alg.step()
-                    self.batch_update(len(data))
+                    try:
+                        batch_loss.backward()
+                        self.optimizer_alg.step()
+                        self.batch_update(len(data))
+                    except RuntimeError:
+                        pass
 
             else:
                 # Validation losses (applied to the validation data)
@@ -349,8 +352,16 @@ class BaseModel(nn.Module):
         """
         if self.epoch is not None:
             epoch_name = 'Epoch {:03}'.format(self.epoch)
+            grad_s = ' / '.join([
+                '{:} {:f} ± {:f} [{:f}, {:f}]'.format(
+                    name, p.data.mean(), p.data.std(), p.data.min(), p.data.max()
+                )
+                for name, p in self.named_parameters()
+                if p.requires_grad and torch.isnan(p.data.mean())
+            ])
         else:
             epoch_name = 'Init'
+            grad_s = ''
         percent = 20 * (batch_i + 1) // n_batches
         progress_s = ''.join(['█'] * percent)
         remainder_s = ''.join([' '] * (20 - percent))
@@ -366,7 +377,7 @@ class BaseModel(nn.Module):
         eta_s = time_to_string(t_eta)
         epoch_hdr = '{:} ({:03d}/{:03d} - {:05.2f}%) [{:}] '
         loss_s = '{:} {:4.3f} ({:4.3f}) {:} / ETA {:}'
-        batch_s = (epoch_hdr + loss_s).format(
+        batch_s = (epoch_hdr + loss_s + grad_s).format(
             epoch_name, batch_i + 1, n_batches,
             100 * (batch_i + 1) / n_batches, progress_s + remainder_s,
             loss_name, b_loss, mean_loss, time_s, eta_s + '\033[0m'
