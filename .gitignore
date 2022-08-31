@@ -94,4 +94,5 @@ ENV/
 # EEG samples
 samples/eeg
 samples/music
+samples/dataset.pt
 weights

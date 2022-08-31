@@ -141,9 +141,6 @@ class BaseModel(nn.Module):
         # Mean loss of the global loss (we don't need the loss for each batch).
         mean_loss = np.mean(losses)
 
-        for scheduler in self.schedulers:
-            scheduler.step()
-
         if train:
             return mean_loss
         else:
@@ -252,6 +249,12 @@ class BaseModel(nn.Module):
                 loss_val, mid_losses, acc = self.mini_batch_loop(
                     val_loader, False
                 )
+
+            for scheduler in self.schedulers:
+                try:
+                    scheduler.step(metrics=loss_val)
+                except TypeError:
+                    scheduler.step()
 
             # Mid losses check
             losses_s = [
