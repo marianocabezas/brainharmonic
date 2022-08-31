@@ -4,7 +4,7 @@ import numpy as np
 from torch.utils.data.dataset import Dataset
 
 
-def shift_tokens(shift, bits=8, notes=32):
+def shift_tokens(shift, bits=4, notes=128):
     remainder = shift
     tokens = []
     for shift_bit in range(bits - 1, -1, -1):
@@ -17,7 +17,7 @@ def shift_tokens(shift, bits=8, notes=32):
     return tokens
 
 
-def on_tokens(note_list, bits=8, notes=32):
+def on_tokens(note_list, bits=4, notes=128):
     tokens = []
     for note in note_list:
         token = np.zeros(2 * notes + bits)
@@ -27,7 +27,7 @@ def on_tokens(note_list, bits=8, notes=32):
     return tokens
 
 
-def off_tokens(note_list, bits=8, notes=32):
+def off_tokens(note_list, bits=4, notes=128):
     tokens = []
     for note in note_list:
         token = np.zeros(2 * notes + bits)
@@ -37,8 +37,7 @@ def off_tokens(note_list, bits=8, notes=32):
     return tokens
 
 
-def roll_to_state(roll, bits=8):
-    notes = len(roll)
+def roll_to_state(roll, bits=8, notes=128):
     shift = 0
     notes_active = np.array([])
     token_list = []
@@ -84,7 +83,7 @@ def roll_to_state(roll, bits=8):
     return np.stack(token_list, axis=1)
 
 
-def state_to_roll(states, bits=8, notes=32):
+def state_to_roll(states, bits=8, notes=128):
     roll = []
     active_notes = []
     for state in states.transpose():
@@ -94,7 +93,10 @@ def state_to_roll(states, bits=8, notes=32):
             active_notes.append(state_code)
         elif state_code < (2 * notes):
             # print('OFF', state_code - notes)
-            active_notes.remove(state_code - notes)
+            try:
+                active_notes.remove(state_code - notes)
+            except ValueError:
+                pass
         else:
             # print('Shift', 2 ** (state_code - 2 * notes))
             shift = 2 ** (state_code - 2 * notes)
@@ -117,8 +119,9 @@ class MotifDataset(Dataset):
         self.multitokens = multitokens
         self.motif_size = motif_size
         self.rolls = []
+        self.states = []
         self.bits = bits
-        min_len = self.motif_size + 1
+        min_len = 2 * self.motif_size + 1
         beat = 0
         for path in paths:
             files = sorted(os.listdir(path))
@@ -181,15 +184,17 @@ class MotifDataset(Dataset):
                         max_notes = np.max(
                             np.sum(piano_roll, axis=0)
                         ).astype(int)
-                        if not self.multitokens:
-                            piano_roll = roll_to_state(
-                                piano_roll, bits=self.bits
-                            )
-                        seq_len = piano_roll.shape[1]
-                        if seq_len > min_len and max_notes < notespbeat:
+                        piano_state = roll_to_state(
+                            piano_roll, bits=self.bits
+                        )
+                        roll_len = piano_roll.shape[1]
+                        if roll_len > min_len and max_notes < notespbeat:
                             self.rolls.append(piano_roll)
-                except EOFError:
-                    print('Unreadable', f)
+                        state_len = piano_state.shape[1]
+                        if state_len > min_len and max_notes < notespbeat:
+                            self.states.append(piano_state)
+                except (EOFError, OSError, KeySignatureError):
+                    print('Unreadable', f, path)
 
         max_notes = [
             np.max(np.sum(roll, axis=0)).astype(int)
@@ -197,42 +202,31 @@ class MotifDataset(Dataset):
         ]
         print(
             '{:d} piano rolls loaded with '
-            '[{:02d}, {:02d}] - {:5.3f} ± {:5.3f}'.format(
+            '[{:02d}, {:02d}] - {:5.3f} ± {:5.3f} '
+            'maximum consecutive notes'.format(
                 len(self.rolls), np.min(max_notes), np.max(max_notes),
                 np.mean(max_notes), np.std(max_notes)
             )
         )
-        # self.samples = [
-        #     (
-        #         roll_i,
-        #         slice(
-        #             ini, ini + self.motif_size
-        #         ),
-        #         slice(
-        #             ini + self.motif_size, ini + self.motif_size + 1
-        #         )
-        #     )
-        #     for roll_i, roll in enumerate(self.rolls)
-        #     for ini in range(roll.shape[1] - 2 * self.motif_size)
-        # ]
 
     def __getitem__(self, index):
-        # roll_i, input_slice, output_idx = self.samples[index]
-
-        # roll = self.rolls[roll_i]
-        roll = self.rolls[index]
-        max_ini = roll.shape[1] - self.motif_size
+        if self.multitokens:
+            song = self.rolls[index]
+        else:
+            song = self.states[index]
+        max_ini = song.shape[1] - (2 * self.motif_size)
         data_ini = np.random.randint(0, max_ini)
         target_ini = data_ini + self.motif_size
-        # data = roll[:, input_slice].astype(np.float32)
-        # target = roll[:, output_idx].astype(np.float32)
-        data = roll[:, data_ini:target_ini].astype(np.float32)
-        target = roll[:, target_ini:target_ini + 1].astype(np.float32)
+        data = song[:, data_ini:target_ini].astype(np.float32)
+        target = song[:, target_ini:(target_ini + self.motif_size)].astype(np.float32)
         if not self.multitokens:
             target = np.argmax(target, axis=0)
 
         return data, target
 
     def __len__(self):
-        # return len(self.samples)
-        return len(self.rolls)
+        if self.multitokens:
+            n_samples = len(self.rolls)
+        else:
+            n_samples = len(self.states)
+        return n_samples

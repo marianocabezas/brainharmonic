@@ -28,6 +28,7 @@ class BaseModel(nn.Module):
         # Init values
         self.device = None
         self.optimizer_alg = None
+        self.schedulers = []
         self.epoch = None
         self.t_train = 0
         self.t_val = 0
@@ -139,6 +140,9 @@ class BaseModel(nn.Module):
 
         # Mean loss of the global loss (we don't need the loss for each batch).
         mean_loss = np.mean(losses)
+
+        for scheduler in self.schedulers:
+            scheduler.step()
 
         if train:
             return mean_loss

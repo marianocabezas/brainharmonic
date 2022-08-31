@@ -46,6 +46,35 @@ def focal_loss(pred, target, alpha=0.75, gamma=2.0):
     return focal.mean()
 
 
+def accuracy_logits(logits, target):
+    prediction = torch.max(logits, dim=1)[1]
+    return 1 - (prediction == target).float().mean()
+
+
+class SelfAttentionBlock(nn.Module):
+    def __init__(self, embed_dim, mlp_dim, heads):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(embed_dim, eps=1e-6)
+        self.attention = nn.MultiheadAttention(
+            embed_dim, heads, batch_first=True
+        )
+        self.ln2 = nn.LayerNorm(embed_dim, eps=1e-6)
+        self.mlp = nn.Linear(embed_dim, mlp_dim)
+
+    def forward(self, x_in, mask=None):
+        x = self.ln1(x_in)
+        x, _ = self.attention(
+            query=x, key=x, value=x, attn_mask=mask,
+            need_weights=False,
+        )
+        x = x + x_in
+
+        y = self.ln2(x)
+        y = self.mlp(y)
+
+        return x + y
+
+
 class MusicTransformer(BaseModel):
     """
         Transformer architecture for motifs inspired by
@@ -55,116 +84,115 @@ class MusicTransformer(BaseModel):
         "Music Transformer"
         https://arxiv.org/abs/1809.04281
     """
+
     def __init__(
-        self,
-        att_filters=None,
-        device=torch.device(
-            "cuda:0" if torch.cuda.is_available() else "cpu"
-        ),
-        channels=128,
-        verbose=0,
+            self,
+            encoder_depth=16,
+            decoder_depth=16,
+            device=torch.device(
+                "cuda:0" if torch.cuda.is_available() else "cpu"
+            ),
+            notes=128,
+            bits=8,
+            multitokens=True,
+            heads=32,
+            lr=1e-3,
+            verbose=0,
     ):
         super().__init__()
         # Init values
-        if att_filters is None:
-            self.att_filters = [64, 32, 16]
-        else:
-            self.att_filters = att_filters
         self.epoch = None
         self.t_train = 0
         self.t_val = 0
+        self.heads = heads
         self.device = device
+        self.multitokens = multitokens
+        if self.multitokens:
+            channels = notes
+        else:
+            channels = 2 * notes + bits
 
         # <Parameter setup>
         self.encoder = nn.ModuleList([
-            nn.Sequential(
-                MultiheadedAttention(channels, f_att, channels // 8),
-                nn.ReLU(),
-                nn.GroupNorm(channels // 8, channels),
-            )
-            for f_att in att_filters
+            SelfAttentionBlock(channels, channels, heads)
+            for _ in range(encoder_depth)
         ])
         self.decoder = nn.ModuleList([
-            nn.Sequential(
-                MultiheadedAttention(channels, f_att, channels // 4),
-                nn.ReLU(),
-                nn.GroupNorm(channels // 4, channels),
-            )
-            for f_att in att_filters[:0:-1]
+            SelfAttentionBlock(channels, channels, heads)
+            for _ in range(decoder_depth)
         ])
-        self.final = MultiheadedAttention(
-            self.att_filters[0], channels, self.att_filters[0] // 4
-        )
 
         # <Loss function setup>
-        self.train_functions = [
-            {
-                'name': 'xent',
-                'weight': 1,
-                # 'f': lambda p, t: F.binary_cross_entropy_with_logits(
-                'f': lambda p, t: focal_loss(
-                    p, t,
-                )
-            },
-            {
-                'name': 'l1',
-                'weight': 1,
-                'f': lambda p, t: F.l1_loss(
-                    torch.sigmoid(p), t,
-                )
-            },
-            # {
-            #     'name': 'bent',
-            #     'weight': 1,
-            #     'f': lambda p, t: torch.sum(
-            #         - torch.softmax(p, dim=1) * torch.log(torch.softmax(p, dim=1)),
-            #         dim=0
-            #     )
-            # }
-        ]
+        if self.multitokens:
+            self.train_functions = [
+                {
+                    'name': 'xent',
+                    'weight': 1,
+                    'f': F.binary_cross_entropy_with_logits
+                },
+            ]
 
-        self.val_functions = [
-            {
-                'name': 'xent',
-                'weight': 1,
-                'f': lambda p, t: F.binary_cross_entropy_with_logits(
-                    p, t,
-                )
-            },
-            {
-                'name': 'mse',
-                'weight': 0,
-                'f': lambda p, t: F.mse_loss(
-                    torch.sigmoid(p), t,
-                )
-            },
-            {
-                'name': 'l1',
-                'weight': 0,
-                'f': lambda p, t: F.l1_loss(
-                    torch.sigmoid(p), t,
-                )
-            },
-            {
-                'name': '0mse',
-                'weight': 0,
-                'f': lambda p, t: F.mse_loss(
-                    torch.zeros_like(t).to(t.device), t,
-                )
-            },
-            {
-                'name': '1mse',
-                'weight': 0,
-                'f': lambda p, t: F.mse_loss(
-                    torch.ones_like(t).to(t.device), t,
-                )
-            },
-        ]
+            self.val_functions = [
+                {
+                    'name': 'xent',
+                    'weight': 1,
+                    'f': F.binary_cross_entropy_with_logits
+                },
+                {
+                    'name': 'mse',
+                    'weight': 0,
+                    'f': lambda p, t: F.mse_loss(
+                        torch.sigmoid(p), t,
+                    )
+                },
+                {
+                    'name': 'l1',
+                    'weight': 0,
+                    'f': lambda p, t: F.l1_loss(
+                        torch.sigmoid(p), t,
+                    )
+                },
+                {
+                    'name': '0mse',
+                    'weight': 0,
+                    'f': lambda p, t: F.mse_loss(
+                        torch.zeros_like(t).to(t.device), t,
+                    )
+                },
+                {
+                    'name': '1mse',
+                    'weight': 0,
+                    'f': lambda p, t: F.mse_loss(
+                        torch.ones_like(t).to(t.device), t,
+                    )
+                },
+            ]
+        else:
+            self.train_functions = [
+                {
+                    'name': 'xent',
+                    'weight': 1,
+                    'f': F.cross_entropy
+                },
+            ]
+
+            self.val_functions = [
+                {
+                    'name': 'xent',
+                    'weight': 0,
+                    'f': F.cross_entropy
+                },
+                {
+                    'name': 'acc',
+                    'weight': 1,
+                    'f': accuracy_logits
+                },
+            ]
 
         # <Optimizer setup>
         # We do this last step after all parameters are defined
         model_params = filter(lambda p: p.requires_grad, self.parameters())
-        self.optimizer_alg = torch.optim.AdamW(model_params, lr=1e-4)
+        self.optimizer_alg = torch.optim.Adam(model_params, lr=lr)
         if verbose > 1:
             print(
                 'Network created on device {:} with training losses '
@@ -176,15 +204,22 @@ class MusicTransformer(BaseModel):
             )
 
     def forward(self, data):
-        for e_tf in self.encoder:
+        N, F, L = data.shape
+        mask = torch.ones((L, L), dtype=torch.bool)
+        mask = torch.logical_not(torch.triu(mask)).to(self.device)
+        seq_range = torch.arange(0, data.shape[-1])
+        x_cord, y_cord = torch.meshgrid(seq_range, seq_range)
+        s_rel = 1 - torch.abs(x_cord - y_cord).type_as(data).to(data.device)
+        snorm_rel = s_rel / L
+        data = data.transpose(-1, -2)
+        for i, e_tf in enumerate(self.encoder):
             e_tf.to(self.device)
-            data = e_tf(data) + data
-        for d_tf in self.decoder:
+            data = e_tf(data, snorm_rel)
+        for i, d_tf in enumerate(self.decoder):
             d_tf.to(self.device)
-            data = d_tf(data) + data
-        self.final.to(self.device)
-        data = self.final(data)
-        return data[:, :, -1:]
+            data = d_tf(data, mask)
+            # data = d_tf(data)
+        return data.transpose(-1, -2)
 
     def next_beat(self, motif):
         self.eval()
@@ -192,107 +227,36 @@ class MusicTransformer(BaseModel):
             tensor_motif = torch.from_numpy(
                 np.expand_dims(motif, axis=0)
             ).to(self.device)
-            next_beat = torch.sigmoid(self(tensor_motif))
-            np_beat = next_beat[-1].detach().cpu().numpy()
+            if self.multitokens:
+                next_beat = torch.sigmoid(self(tensor_motif))
+            else:
+                next_beat = torch.softmax(self(tensor_motif), dim=1)
 
-        return np_beat
+        return next_beat.detach().cpu().numpy()[0, ...]
 
     def song(self, motif, n_beats):
         song_list = [motif]
+        song = [motif]
         for _ in range(n_beats):
-            note = self.next_beat(motif)
-            new_note = deepcopy(note)
-            # new_note[np.argsort(note, axis=0)[:-6], :] = 0
-            # new_note[np.argsort(note, axis=0)[:-7:-1], :] = 1
-            motif = np.concatenate([motif, new_note > 0.5], axis=-1)
-            # song_list.append(np.exp(note) / sum(np.exp(note)))
-            note_sum = np.sum(np.max(note))
-            norm_note = note / note_sum if note_sum > 0 else note
-            song_list.append(
-                # norm_note
-                note
-            )
+            beat = self.next_beat(motif)
+            new_notes = deepcopy(beat)
+            if self.multitokens:
+                motif = (new_notes > 0.5).astype(np.float32)
+                song_list.append(
+                    beat
+                )
+                song.append(
+                    new_notes > 0.5
+                )
+            else:
+                new_tokens = deepcopy(beat)
+                max_val = np.max(new_tokens, axis=0, keepdims=True)
+                motif = (new_tokens == max_val).astype(np.float32)
+                song_list.append(
+                    beat
+                )
+                song.append(
+                    new_tokens == max_val
+                )
 
-        return np.concatenate(song_list, axis=1)
-
-
-class MultiheadedAttention(nn.Module):
-    """
-        Mmulti-headed attention based on
-        A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, Ll. Jones, A.N. Gomez,
-        L. Kaiser, I. Polosukhin
-        "Attention Is All You Need"
-        https://arxiv.org/abs/1706.03762
-    """
-
-    def __init__(
-            self, in_features, att_features, heads=32,
-            masked=False, norm=partial(torch.softmax, dim=-1),
-    ):
-        super().__init__()
-        self.blocks = heads
-        self.features = att_features // heads
-        self.out_features = self.features * heads
-        self.sa_blocks = nn.ModuleList([
-            SelfAttention(
-                in_features, self.features, masked, norm
-            )
-            for _ in range(self.blocks)
-        ])
-        self.final_block = nn.Sequential(
-            nn.ReLU(),
-            nn.GroupNorm(heads, self.out_features),
-            nn.Conv1d(self.out_features, self.out_features, 1),
-            nn.ReLU(),
-            nn.GroupNorm(heads, self.out_features),
-            nn.Conv1d(self.out_features, in_features, 1)
-        )
-
-    def forward(self, x):
-        x = torch.cat([sa_i(x) for sa_i in self.sa_blocks], dim=1)
-        z = self.final_block(x)
-        return z
-
-
-class SelfAttention(nn.Module):
-    """
-        Non-local self-attention block based on
-        X. Wang, R. Girshick, A.Gupta, K. He
-        "Non-local Neural Networks"
-        https://arxiv.org/abs/1711.07971
-    """
-
-    def __init__(
-            self, in_features, att_features, masked=False,
-            norm=partial(torch.softmax, dim=2)
-    ):
-        super().__init__()
-        self.features = att_features
-        self.map_key = nn.Conv1d(in_features, att_features, 1)
-        self.map_query = nn.Conv1d(in_features, att_features, 1)
-        self.map_value = nn.Conv1d(in_features, att_features, 1)
-        self.masked = masked
-        self.norm = norm
-
-    def forward(self, x):
-        key = F.instance_norm(self.map_key(x))
-        # key = self.map_key(x)
-        query = F.instance_norm(self.map_query(x))
-        # query = self.map_query(x)
-        value = self.map_value(x)
-
-        # seq_range = torch.arange(0, x.shape[-1])
-        att = torch.bmm(query.transpose(1, 2), key)
-        # x_cord, y_cord = torch.meshgrid(seq_range, seq_range)
-        # s_rel = 1 - torch.abs(x_cord - y_cord).type_as(x).to(x.device)
-        # snorm_rel = s_rel / x.shape[-1]
-        # att_map = self.norm((att * snorm_rel) / np.sqrt(self.features))
-        if self.masked:
-            masked_att = torch.triu(att)
-            att_map = self.norm(masked_att / np.sqrt(self.features))
-        else:
-            att_map = self.norm(att / np.sqrt(self.features))
-
-        self_att = torch.bmm(value, att_map)
-
-        return self_att
+        return np.concatenate(song_list, axis=1), np.concatenate(song, axis=1)
