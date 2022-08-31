@@ -93,6 +93,7 @@ ENV/
 
 # EEG samples
 samples/eeg
-samples/music
+samples/music/*
+!samples/music/midi_scraping.ipynb
 samples/dataset.pt
 weights
