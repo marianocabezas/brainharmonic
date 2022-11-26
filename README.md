@@ -60,7 +60,7 @@ Since this project deals both with brain signal files and musical files. In orde
 Another Brainhack project to standardise EEG data formats and processing pipeline that may be useful for this:
 https://www.repronim.org/reproschema-ui/#/?url=https%3A%2F%2Fraw.githubusercontent.com%2FRemi-Gau%2FeCobidas%2Fhack_artemis_202110%2Fschemas%2Fartemis%2Fprotocols%2Fartemis_schema.jsonld
 
-## Collaborator set-up requirementsgit clone
+## Collaborator set-up requirements (git clone)
 The whole project will be based on python 3.x coding. While other preprocessing tools not based on python for fMRI/xEG can be used to clean or prepare the input signals for the model, the models will be implemented in python, preferrably using pytorch. Some useful python packages to start hacking include:
 - [Numpy](https://numpy.org/) and [Scipy](https://scipy.org/) (basic matrix operations)
 - [Bottleneck](https://bottleneck.readthedocs.io/) (moving window operations, useful for timeseries)
