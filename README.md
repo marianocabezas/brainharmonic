@@ -15,7 +15,7 @@ While this is a novel idea and not many works deal with similar topics, we have 
 - [Carlos Hernandez-Olivan, Jose R. Beltran, "Music Composition with Deep Learning: A Review"](https://arxiv.org/abs/2108.12290)
 - [Jing Lu, et al. "Scale-Free Brain-Wave Music from Simultaneously EEG and fMRI Recordings"](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0049773)
 - [Sageev Oore, et al. "This Time with Feeling: Learning Expressive Musical Performance"](https://arxiv.org/abs/1808.03715)
-- [Cheng-Zhi Anna Huang et al. "Music transformer](https://arxiv.org/abs/1809.04281)
+- [Cheng-Zhi Anna Huang et al. "Music transformer"](https://arxiv.org/abs/1809.04281)
 
 We would also like to include some repositories on works related to music generation:
 [Synthesizer](https://github.com/irmen/synthesizer)
