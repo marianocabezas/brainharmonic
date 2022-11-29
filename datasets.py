@@ -108,6 +108,74 @@ def state_to_roll(states, bits=8, notes=128):
     return np.stack(roll, axis=1)
 
 
+def load_roll_state(filename, bits=8):
+    t = 0
+    beat = 0
+    discard = False
+    mpb_i = None
+    note_found = False
+    piano_roll = None
+    piano_state = None
+    try:
+        mid_temp = MidiFile(filename, clip=True)
+        notes = {
+            n: {'start': [], 'end': [], 'velocity': []}
+            for n in range(128)
+        }
+        tpb = mid_temp.ticks_per_beat
+        for track in mid_temp.tracks:
+            for msg in track:
+                if not msg.is_meta:
+                    if note_found:
+                        t += msg.time
+                    if msg.type == 'note_on':
+                        if not note_found:
+                            t = 0
+                            note_found = True
+                        beat = t // tpb
+                        if msg.velocity > 0:
+                            notes[msg.note]['start'].append(beat)
+                            notes[msg.note]['velocity'].append(
+                                msg.velocity
+                            )
+                        else:
+                            notes[msg.note]['end'].append(beat)
+                    elif msg.type == 'note_off':
+                        beat = t // tpb
+                        notes[msg.note]['end'].append(beat)
+                else:
+                    if msg.type == 'set_tempo':
+                        if mpb_i is None:
+                            mpb_i = msg.tempo
+                        else:
+                            discard = True
+                            break
+                    elif msg.type == 'time_signature':
+                        num = msg.numerator
+                        den = msg.denominator
+                        if num != 4 and den != 4:
+                            discard = True
+                            break
+
+        if not discard:
+            piano_roll = np.zeros((128, beat))
+            for n, events in notes.items():
+                if len(events['start']) > 0:
+                    for n_ini, n_end, v in zip(
+                            events['start'], events['end'],
+                            events['velocity']
+                    ):
+                        # piano_roll[n, n_ini:n_end] = v / 127
+                        piano_roll[n, n_ini:n_end] = 1
+            piano_state = roll_to_state(
+                piano_roll, bits=bits
+            )
+    except (EOFError, OSError, KeySignatureError):
+        print('Unreadable', f, path)
+
+    return piano_roll, piano_state
+
+
 class MotifDataset(Dataset):
     def __init__(
             self, paths=None, motif_size=64, notespbeat=12,
