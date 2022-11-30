@@ -399,3 +399,19 @@ class BaseModel(nn.Module):
         self.load_state_dict(
             torch.load(net_name, map_location=self.device)
         )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
