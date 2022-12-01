@@ -1,11 +1,14 @@
 from functools import partial
+import os
 import torch
 from torch import nn
 import torch.nn.functional as F
+import requests
 import numpy as np
 from copy import deepcopy
 from base import BaseModel
-
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'MuseMorphose'))
 
 
 def accuracy_logits(logits, target):
@@ -236,134 +239,134 @@ class MusicTransformer(BaseModel):
 
 
 
-class MonophonicTransformer(BaseModel):
-    def __init__(
-        self,
-        encoder_depth=16,
-        decoder_depth=16,
-        device=torch.device(
-            "cuda:0" if torch.cuda.is_available() else "cpu"
-        ),
-        heads=32,
-        lr=1e-3,
-        verbose=0,
-    ):
-        super().__init__()
-        # Init values
-        self.epoch = None
-        self.t_train = 0
-        self.t_val = 0
-        self.heads = heads
-        self.device = device
+# class MonophonicTransformer(BaseModel):
+#     def __init__(
+#         self,
+#         encoder_depth=16,
+#         decoder_depth=16,
+#         device=torch.device(
+#             "cuda:0" if torch.cuda.is_available() else "cpu"
+#         ),
+#         heads=32,
+#         lr=1e-3,
+#         verbose=0,
+#     ):
+#         super().__init__()
+#         # Init values
+#         self.epoch = None
+#         self.t_train = 0
+#         self.t_val = 0
+#         self.heads = heads
+#         self.device = device
 
-        # <Parameter setup>
-        self.encoder = nn.ModuleList([
-            SelfAttentionBlock(16, 1, heads)
-            for _ in range(encoder_depth)
-        ])
-        self.decoder = nn.ModuleList([
-            SelfAttentionBlock(16, 1, heads)
-            for _ in range(decoder_depth)
-        ])
+#         # <Parameter setup>
+#         self.encoder = nn.ModuleList([
+#             SelfAttentionBlock(16, 1, heads)
+#             for _ in range(encoder_depth)
+#         ])
+#         self.decoder = nn.ModuleList([
+#             SelfAttentionBlock(16, 1, heads)
+#             for _ in range(decoder_depth)
+#         ])
 
-        # <Loss function setup>
-        self.train_functions = [
-            {
-                'name': 'xent',
-                'weight': 1,
-                'f': F.cross_entropy
-            },
-        ]
+#         # <Loss function setup>
+#         self.train_functions = [
+#             {
+#                 'name': 'xent',
+#                 'weight': 1,
+#                 'f': F.cross_entropy
+#             },
+#         ]
         
-        self.val_functions = [
-            {
-                'name': 'xent',
-                'weight': 0,
-                'f': F.cross_entropy
-            },
-            {
-                'name': 'acc',
-                'weight': 1,
-                'f': accuracy_logits
-            },
-        ]
+#         self.val_functions = [
+#             {
+#                 'name': 'xent',
+#                 'weight': 0,
+#                 'f': F.cross_entropy
+#             },
+#             {
+#                 'name': 'acc',
+#                 'weight': 1,
+#                 'f': accuracy_logits
+#             },
+#         ]
 
-        # <Optimizer setup>
-        # We do this last step after all parameters are defined
-        model_params = filter(lambda p: p.requires_grad, self.parameters())
-        # self.optimizer_alg = torch.optim.Adam(model_params, lr=lr)
-        self.optimizer_alg = torch.optim.SGD(model_params, lr=lr)
-        self.schedulers = [
-            torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer_alg, 'min'
-            )
-        ]
-        if verbose > 1:
-            print(
-                'Network created on device {:} with training losses '
-                '[{:}] and validation losses [{:}]'.format(
-                    self.device,
-                    ', '.join([tf['name'] for tf in self.train_functions]),
-                    ', '.join([vf['name'] for vf in self.val_functions])
-                )
-            )
+#         # <Optimizer setup>
+#         # We do this last step after all parameters are defined
+#         model_params = filter(lambda p: p.requires_grad, self.parameters())
+#         # self.optimizer_alg = torch.optim.Adam(model_params, lr=lr)
+#         self.optimizer_alg = torch.optim.SGD(model_params, lr=lr)
+#         self.schedulers = [
+#             torch.optim.lr_scheduler.ReduceLROnPlateau(
+#                 self.optimizer_alg, 'min'
+#             )
+#         ]
+#         if verbose > 1:
+#             print(
+#                 'Network created on device {:} with training losses '
+#                 '[{:}] and validation losses [{:}]'.format(
+#                     self.device,
+#                     ', '.join([tf['name'] for tf in self.train_functions]),
+#                     ', '.join([vf['name'] for vf in self.val_functions])
+#                 )
+#             )
 
-    def forward(self, data):
-        N, L = data.shape
-        mask = torch.ones((L,), dtype=bool)
-        # mask = torch.logical_not(torch.triu(mask)).to(self.device)
-        seq_range = torch.arange(0, data.shape[-1])
-        x_cord = seq_range
-        s_rel = 1 - torch.abs(x_cord).type_as(data).to(data.device)
-        snorm_rel = s_rel / L
-        data = torch.tensor(data.transpose(0, 1), dtype=int)
-        for i, e_tf in enumerate(self.encoder):
-            e_tf.to(self.device)
-            data = e_tf(data, snorm_rel)
-        for i, d_tf in enumerate(self.decoder):
-            d_tf.to(self.device)
-            data = d_tf(data, mask)
-        return data.transpose(0, 1)
+#     def forward(self, data):
+#         N, L = data.shape
+#         mask = torch.ones((L,), dtype=bool)
+#         # mask = torch.logical_not(torch.triu(mask)).to(self.device)
+#         seq_range = torch.arange(0, data.shape[-1])
+#         x_cord = seq_range
+#         s_rel = 1 - torch.abs(x_cord).type_as(data).to(data.device)
+#         snorm_rel = s_rel / L
+#         data = torch.tensor(data.transpose(0, 1), dtype=int)
+#         for i, e_tf in enumerate(self.encoder):
+#             e_tf.to(self.device)
+#             data = e_tf(data, snorm_rel)
+#         for i, d_tf in enumerate(self.decoder):
+#             d_tf.to(self.device)
+#             data = d_tf(data, mask)
+#         return data.transpose(0, 1)
 
-    def next_beat(self, motif):
-        self.eval()
-        with torch.no_grad():
-            tensor_motif = torch.from_numpy(
-                np.expand_dims(motif, axis=0)
-            ).to(self.device)
-            if self.multitokens:
-                next_beat = torch.sigmoid(self(tensor_motif))
-            else:
-                next_beat = torch.softmax(self(tensor_motif), dim=1)
+#     def next_beat(self, motif):
+#         self.eval()
+#         with torch.no_grad():
+#             tensor_motif = torch.from_numpy(
+#                 np.expand_dims(motif, axis=0)
+#             ).to(self.device)
+#             if self.multitokens:
+#                 next_beat = torch.sigmoid(self(tensor_motif))
+#             else:
+#                 next_beat = torch.softmax(self(tensor_motif), dim=1)
 
-        return next_beat.detach().cpu().numpy()[0, ...]
+#         return next_beat.detach().cpu().numpy()[0, ...]
 
-    def song(self, motif, n_beats):
-        song_list = [motif]
-        song = [motif]
-        for _ in range(n_beats):
-            beat = self.next_beat(motif)
-            new_notes = deepcopy(beat)
-            if self.multitokens:
-                motif = (new_notes > 0.5).astype(np.float32)
-                song_list.append(
-                    beat
-                )
-                song.append(
-                    new_notes > 0.5
-                )
-            else:
-                new_tokens = deepcopy(beat)
-                max_val = np.max(new_tokens, axis=0, keepdims=True)
-                motif = (new_tokens == max_val).astype(np.float32)
-                song_list.append(
-                    beat
-                )
-                song.append(
-                    new_tokens == max_val
-                )
+#     def song(self, motif, n_beats):
+#         song_list = [motif]
+#         song = [motif]
+#         for _ in range(n_beats):
+#             beat = self.next_beat(motif)
+#             new_notes = deepcopy(beat)
+#             if self.multitokens:
+#                 motif = (new_notes > 0.5).astype(np.float32)
+#                 song_list.append(
+#                     beat
+#                 )
+#                 song.append(
+#                     new_notes > 0.5
+#                 )
+#             else:
+#                 new_tokens = deepcopy(beat)
+#                 max_val = np.max(new_tokens, axis=0, keepdims=True)
+#                 motif = (new_tokens == max_val).astype(np.float32)
+#                 song_list.append(
+#                     beat
+#                 )
+#                 song.append(
+#                     new_tokens == max_val
+#                 )
 
-        return np.concatenate(song_list, axis=1), np.concatenate(song, axis=1)
+#         return np.concatenate(song_list, axis=1), np.concatenate(song, axis=1)
 
 
 
@@ -426,3 +429,5 @@ def focal_loss(pred, target, alpha=0.75, gamma=2.0):
     focal = torch.cat([focal_fg, focal_bg])
 
     return focal.mean()
+
+

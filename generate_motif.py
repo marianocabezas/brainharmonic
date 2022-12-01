@@ -44,19 +44,21 @@ def find_most_dominant_freq(signal):
     return most_dominant_freq
 
 
-def generate_notes(raw_signal, number_of_notes_in_motif):
+def generate_notes(raw_signal, number_of_notes_in_motif, range_scale=0.4):
     #this will return a specified number of notes in a 13-notes range.
     # The range is determined by the overall frequency of the whole signal sequence
     notes = []
-
-    mean_signal_cross_channels = np.mean(raw_signal, axis=0)
+    if len(raw_signal.shape) > 1:
+        mean_signal_cross_channels = np.mean(raw_signal, axis=0)
+    else:
+        mean_signal_cross_channels = raw_signal
 
     # find most dominant freg on the whole signal sequence
     most_dominant_freq = find_most_dominant_freq(mean_signal_cross_channels)
 
     # map to a relevant range of notes - the higher the frequency, the higher the note.
     # From this note we identify a corresponding range of 12 notes with this note as the centre
-    corresponding_note = floor(most_dominant_freq * 128)
+    corresponding_note = floor(most_dominant_freq * 128 * range_scale)
     min_note_in_motif = max(0, min(corresponding_note - 6, 115))
 
     sds = [] #array of standard deviation for each segment
@@ -84,13 +86,17 @@ def generate_notes(raw_signal, number_of_notes_in_motif):
                 notes[i] = min(127,notes[i] + floor(sds[i] / sd * 13))
 
     return notes
+    
 
 # GENERATE LOUDNESS (= velocity for midi)
 def generate_velocities(raw_signal, number_of_notes_in_motif):
     # this returns the loudness of each note in the motif.
     # The loudness is evaluated based on the signal strength for each segment
     velocities = []
-    mean_signal_cross_channels = np.mean(raw_signal, axis=0)
+    if len(raw_signal.shape) > 1:
+        mean_signal_cross_channels = np.mean(raw_signal, axis=0)
+    else:
+        mean_signal_cross_channels = raw_signal
     mean_signal_cross_channels_scaled  = (mean_signal_cross_channels - np.min(mean_signal_cross_channels))
     capped_signal_strength = np.quantile(mean_signal_cross_channels_scaled,0.95) #cap signal strength at 0.95 quantile to avoid extreme ones
 
@@ -108,7 +114,10 @@ def generate_velocities(raw_signal, number_of_notes_in_motif):
 
 def generate_durations(raw_signal, number_of_notes_in_motif):
     durations = []
-    mean_signal_cross_channels = np.mean(raw_signal, axis=0)
+    if len(raw_signal.shape) > 1:
+        mean_signal_cross_channels = np.mean(raw_signal, axis=0)
+    else:
+        mean_signal_cross_channels = raw_signal
     sd_whole_sequence = np.std(mean_signal_cross_channels)
     sds = [] # array of standard deviations for each segment
 
@@ -146,6 +155,32 @@ def add_random_fast_notes(note,number_added_notes):
 def add_ending_note_for_long_motif(notes):
     most_frequent_note = max(notes,key=notes.count)
     notes.append(most_frequent_note)
+
+
+def generate_prompt(x, file_name='/tmp/tmpmidi.mid', tickspeed=480, number_of_notes_in_motif=10):
+    midi_file = File(tickspeed=tickspeed)
+    track = midi_file.add_track('prompt')
+
+    notes = generate_notes(x,number_of_notes_in_motif)
+    print("Notes: ",notes)
+    velocities = generate_velocities(x,number_of_notes_in_motif)
+    print("Velocities: ", velocities)
+    durations = generate_durations(x,number_of_notes_in_motif)
+    print("Durations: ",durations)
+
+    cumulative_time = np.cumsum(durations[0])
+    cumulative_time = cumulative_time * tickspeed * 0.25
+    cumulative_time = [int(x) for x in cumulative_time]
+    print("Cumulative time: ",cumulative_time)
+
+    for i in range(number_of_notes_in_motif):
+        track.add_note(note=notes[i],time=cumulative_time[i],length=durations[0][i],velocity=velocities[i])
+
+    # file_name = path + "/subject" + str(subject) + "_run" + str(runs[0]) + ".mid"
+    midi_file.save(file_name)
+    return file_name
+
+
 
 
 # clustering for timbre groups
@@ -187,3 +222,4 @@ for subject in subjects:
 
     file_name = path + "/subject" + str(subject) + "_run" + str(runs[0]) + ".mid"
     midi_file.save(file_name)
+

@@ -97,4 +97,4 @@ samples/music/*
 !samples/music/midi_scraping.ipynb
 samples/dataset.pt
 weights
-samples/music/motifs/*.mid
+**.mid

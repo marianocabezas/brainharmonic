@@ -76,3 +76,15 @@ The whole project will be based on python 3.x coding. While other preprocessing 
 - [Jupyter](https://jupyter.org/) (not strictly necessary, but helpful for prototyping code)
 - [MuseScoe](https://musescore.org/) (show music sheets from MIDI files in your Jupyer Notebooks!)
 - [AudioLazy](https://pypi.org/project/audiolazy/) ()
+
+
+# For MuseMorphose, make sure to download all the datasets given in that repository's readme into its main directory.
+```
+cd ./MuseMorphose
+# download REMI-pop-1.7K dataset
+wget -O remi_dataset.tar.gz https://zenodo.org/record/4782721/files/remi_dataset.tar.gz?download=1
+tar xzvf remi_dataset.tar.gz
+rm remi_dataset.tar.gz
+python attributes.py
+wget -O musemorphose_pretrained_weights.pt https://zenodo.org/record/5119525/files/musemorphose_pretrained_weights.pt?download=1
+```
