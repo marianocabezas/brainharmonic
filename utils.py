@@ -10,6 +10,7 @@ from nibabel import load as load_nii
 from scipy.ndimage.morphology import binary_dilation as imdilate
 from scipy.ndimage.morphology import binary_erosion as imerode
 import torch
+from mido import Message, MetaMessage, MidiFile, MidiTrack
 
 
 """
@@ -266,3 +267,37 @@ def to_torch_var(
         dtype=dtype
     )
     return var
+
+
+def roll_to_midi(path, name, roll, timing):
+    mid = MidiFile()
+    track = MidiTrack()
+    mid.tracks.append(track)
+
+    notes = []
+    next_t = 0
+    for beat in np.moveaxis(roll, 0, 1):
+        beat_notes = np.where(np.squeeze(beat) > 0)[0]
+        if len(beat_notes) > 0:
+            for note in beat_notes:
+                if not (note in notes):
+                    track.append(Message(
+                        'note_on', time=next_t * timing, note=note, 
+                        velocity=int(np.squeeze(beat)[note] * 127)))
+                    print('Note on', note, int(np.squeeze(beat)[note] * 127), next_t * timing
+                         )
+                    notes.append(note)
+                    next_t = 0
+            for note in notes:
+                if not (note in beat_notes):
+                    track.append(Message('note_on', time=next_t * timing, note=note, velocity=0))
+                    print('Note off', note)
+                    next_t = 0
+            notes = beat_notes.tolist()
+        else:
+            for note in notes:
+                track.append(Message('note_on', time=next_t * timing, note=note, velocity=0))
+                print('Note off', note, next_t * timing)
+            notes = []
+        next_t += 1
+    mid.save(os.path.join(path, name))

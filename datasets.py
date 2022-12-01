@@ -112,8 +112,8 @@ Generate a monophonic piano roll by taking the lowest note of every chord in a p
 """
 def roll_to_monoroll(roll, bits=8, notes=128):
     monoroll = [np.nonzero(roll[:, i])[0] for i in range(roll.shape[1])]
-    monoroll = [m[0] if len(m) > 0 else 0 for m in monoroll]
-    return monoroll
+    monoroll = [int(m[0]) if len(m) > 0 else 0 for m in monoroll]
+    return np.array(monoroll)
 
 
 def load_roll_state(filename, bits=8):
@@ -187,12 +187,13 @@ def load_roll_state(filename, bits=8):
 class MotifDataset(Dataset):
     def __init__(
             self, paths=None, motif_size=64, notespbeat=12,
-            bits=8, multitokens=True
+            bits=8, multitokens=True, monophonic=False
     ):
         # Init
         if paths is None:
             paths = ['samples/music/jazz/', 'samples/music/classical/']
         self.multitokens = multitokens
+        self.monophonic = monophonic
         self.motif_size = motif_size
         self.rolls = []
         self.monorolls = []
@@ -292,17 +293,27 @@ class MotifDataset(Dataset):
         )
 
     def __getitem__(self, index):
-        if self.multitokens:
+        if self.monophonic:
             song = self.rolls[index]
+            max_ini = song.shape[1] - (2 * self.motif_size)
+            data_ini = np.random.randint(0, max_ini)
+            target_ini = data_ini + self.motif_size
+            data = song[:, data_ini:target_ini].astype(np.float32)
+            target = song[:, target_ini:(target_ini + self.motif_size)].astype(np.float32)
+            data = roll_to_monoroll(data)
+            target = roll_to_monoroll(target)
         else:
-            song = self.states[index]
-        max_ini = song.shape[1] - (2 * self.motif_size)
-        data_ini = np.random.randint(0, max_ini)
-        target_ini = data_ini + self.motif_size
-        data = song[:, data_ini:target_ini].astype(np.float32)
-        target = song[:, target_ini:(target_ini + self.motif_size)].astype(np.float32)
-        if not self.multitokens:
-            target = np.argmax(target, axis=0)
+            if self.multitokens:
+                song = self.rolls[index]
+            else:
+                song = self.states[index]
+            max_ini = song.shape[1] - (2 * self.motif_size)
+            data_ini = np.random.randint(0, max_ini)
+            target_ini = data_ini + self.motif_size
+            data = song[:, data_ini:target_ini].astype(np.float32)
+            target = song[:, target_ini:(target_ini + self.motif_size)].astype(np.float32)
+            if not self.multitokens:
+                target = np.argmax(target, axis=0)
 
         return data, target
 
@@ -378,4 +389,4 @@ def load_rolls(test_path):
             pass
     print('There were {:d} rolls with non-4/4 signatures'.format(badsignatures))
     print('{:d} rolls were loaded from {:d} files'.format(len(rolls), len(files)))
-    return rolls
+    return rolls, tpb
