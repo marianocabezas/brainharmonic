@@ -13,6 +13,7 @@ import random
 from eeg_midi import File
 from eeg_midi import Track
 from eeg_midi import Note
+import matplotlib.pyplot as plt
 
 path = 'samples/music/motifs'
 #if not os.path.exist(path):
