@@ -182,44 +182,41 @@ def generate_prompt(x, file_name='/tmp/tmpmidi.mid', tickspeed=480, number_of_no
 
 
 
+def _deletethislinetogeneratemotifsonimport():
+    subjects = range(108)
+    runs = [1]
+    tickspeed = 480
 
-# clustering for timbre groups
+    for subject in subjects:
+        subject = subject + 1
+        print("Subject %s" %subject)
 
-# testing
-subjects = range(108)
-runs = [1]
-tickspeed = 480
+        # Get data and locate in to given path
+        files = eegbci.load_data(subject, runs, '../datasets/')
+        raws = [read_raw_edf(f, preload=True) for f in files]
+        # Combine all loaded runs
+        raw_obj = concatenate_raws(raws)
+        open_eyes_data = raw_obj.get_data()
 
-for subject in subjects:
-    subject = subject + 1
-    print("Subject %s" %subject)
+        midi_file = File(tickspeed=tickspeed)
+        track_name = "subject" + str(subject) + "_run" + str(runs)
+        track = midi_file.add_track(track_name)
 
-    # Get data and locate in to given path
-    files = eegbci.load_data(subject, runs, '../datasets/')
-    raws = [read_raw_edf(f, preload=True) for f in files]
-    # Combine all loaded runs
-    raw_obj = concatenate_raws(raws)
-    open_eyes_data = raw_obj.get_data()
+        notes = generate_notes(open_eyes_data,number_of_notes_in_motif)
+        print("Notes: ",notes)
+        velocities = generate_velocities(open_eyes_data,number_of_notes_in_motif)
+        print("Velocities: ", velocities)
+        durations = generate_durations(open_eyes_data,number_of_notes_in_motif)
+        print("Durations: ",durations)
 
-    midi_file = File(tickspeed=tickspeed)
-    track_name = "subject" + str(subject) + "_run" + str(runs)
-    track = midi_file.add_track(track_name)
+        cumulative_time = np.cumsum(durations[0])
+        cumulative_time = cumulative_time * tickspeed
+        cumulative_time = [int(x) for x in cumulative_time]
+        print("Cumulative time: ",cumulative_time)
 
-    notes = generate_notes(open_eyes_data,number_of_notes_in_motif)
-    print("Notes: ",notes)
-    velocities = generate_velocities(open_eyes_data,number_of_notes_in_motif)
-    print("Velocities: ", velocities)
-    durations = generate_durations(open_eyes_data,number_of_notes_in_motif)
-    print("Durations: ",durations)
+        for i in range(number_of_notes_in_motif):
+            track.add_note(note=notes[i],time=cumulative_time[i],length=durations[0][i],velocity=velocities[i])
 
-    cumulative_time = np.cumsum(durations[0])
-    cumulative_time = cumulative_time * tickspeed
-    cumulative_time = [int(x) for x in cumulative_time]
-    print("Cumulative time: ",cumulative_time)
-
-    for i in range(number_of_notes_in_motif):
-        track.add_note(note=notes[i],time=cumulative_time[i],length=durations[0][i],velocity=velocities[i])
-
-    file_name = path + "/subject" + str(subject) + "_run" + str(runs[0]) + ".mid"
-    midi_file.save(file_name)
+        file_name = path + "/subject" + str(subject) + "_run" + str(runs[0]) + ".mid"
+        midi_file.save(file_name)
 
