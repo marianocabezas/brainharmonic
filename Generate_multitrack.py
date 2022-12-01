@@ -68,7 +68,7 @@ def get_transpose_steps(eeg_channel_signal,eeg_global_signal):
 def get_time_delay(eeg_channel_signal,eeg_global_signal):
     correlation = signal.correlate(eeg_channel_signal - np.mean(eeg_channel_signal), eeg_global_signal - np.mean(eeg_global_signal), mode="full")
     lags = signal.correlation_lags(len(eeg_channel_signal), len(eeg_global_signal), mode="full")
-    lag = lags[np.argmax(abs(correlation))]
+    lag = floor(lags[np.argmax(abs(correlation))])
     return lag
 
 
@@ -135,9 +135,8 @@ def add_special_effects(song, special_effect, channel):
 def change_track_velocity(track, velocity_factor):
     for message in track:
         if message.type in ('note_on', 'note_off'):
-            message.velocity  = message.velocity*velocity_factor
+            message.velocity = floor(message.velocity*velocity_factor)
     return track
-
 
 
 def create_multitrack(song,global_signal,first_signal, second_signal, third_signal,
