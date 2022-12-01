@@ -107,6 +107,14 @@ def state_to_roll(states, bits=8, notes=128):
 
     return np.stack(roll, axis=1)
 
+"""
+Generate a monophonic piano roll by taking the lowest note of every chord in a polyphonic roll.
+"""
+def roll_to_monoroll(roll, bits=8, notes=128):
+    monoroll = [np.nonzero(roll[:, i])[0] for i in range(roll.shape[1])]
+    monoroll = [int(m[0]) if len(m) > 0 else 0 for m in monoroll]
+    return np.array(monoroll)
+
 
 def load_roll_state(filename, bits=8):
     t = 0
@@ -179,15 +187,18 @@ def load_roll_state(filename, bits=8):
 class MotifDataset(Dataset):
     def __init__(
             self, paths=None, motif_size=64, notespbeat=12,
-            bits=8, multitokens=True
+            bits=8, multitokens=True, monophonic=False
     ):
         # Init
         if paths is None:
             paths = ['samples/music/jazz/', 'samples/music/classical/']
         self.multitokens = multitokens
+        self.monophonic = monophonic
         self.motif_size = motif_size
         self.rolls = []
+        self.monorolls = []
         self.states = []
+        self.keys = []
         self.bits = bits
         min_len = 2 * self.motif_size + 1
         beat = 0
@@ -238,6 +249,8 @@ class MotifDataset(Dataset):
                                     if num != 4 and den != 4:
                                         discard = True
                                         break
+                                elif msg.type == 'key_signature':
+                                    key = msg.key
 
                     if not discard:
                         piano_roll = np.zeros((128, beat))
@@ -252,6 +265,7 @@ class MotifDataset(Dataset):
                         max_notes = np.max(
                             np.sum(piano_roll, axis=0)
                         ).astype(int)
+                        # monoroll = 
                         piano_state = roll_to_state(
                             piano_roll, bits=self.bits
                         )
@@ -261,6 +275,7 @@ class MotifDataset(Dataset):
                         state_len = piano_state.shape[1]
                         if state_len > min_len and max_notes < notespbeat:
                             self.states.append(piano_state)
+                        self.keys.append(key)
                 except (EOFError, OSError, KeySignatureError):
                     print('Unreadable', f, path)
 
@@ -278,17 +293,27 @@ class MotifDataset(Dataset):
         )
 
     def __getitem__(self, index):
-        if self.multitokens:
+        if self.monophonic:
             song = self.rolls[index]
+            max_ini = song.shape[1] - (2 * self.motif_size)
+            data_ini = np.random.randint(0, max_ini)
+            target_ini = data_ini + self.motif_size
+            data = song[:, data_ini:target_ini].astype(np.float32)
+            target = song[:, target_ini:(target_ini + self.motif_size)].astype(np.float32)
+            data = roll_to_monoroll(data)
+            target = roll_to_monoroll(target)
         else:
-            song = self.states[index]
-        max_ini = song.shape[1] - (2 * self.motif_size)
-        data_ini = np.random.randint(0, max_ini)
-        target_ini = data_ini + self.motif_size
-        data = song[:, data_ini:target_ini].astype(np.float32)
-        target = song[:, target_ini:(target_ini + self.motif_size)].astype(np.float32)
-        if not self.multitokens:
-            target = np.argmax(target, axis=0)
+            if self.multitokens:
+                song = self.rolls[index]
+            else:
+                song = self.states[index]
+            max_ini = song.shape[1] - (2 * self.motif_size)
+            data_ini = np.random.randint(0, max_ini)
+            target_ini = data_ini + self.motif_size
+            data = song[:, data_ini:target_ini].astype(np.float32)
+            target = song[:, target_ini:(target_ini + self.motif_size)].astype(np.float32)
+            if not self.multitokens:
+                target = np.argmax(target, axis=0)
 
         return data, target
 
@@ -298,3 +323,70 @@ class MotifDataset(Dataset):
         else:
             n_samples = len(self.states)
         return n_samples
+    
+
+
+
+
+
+def load_rolls(test_path):
+    files = os.listdir(test_path)
+    mpb = []
+    tpb = []
+    f_files = []
+    rolls = []
+    badsignatures = 0
+    for f in sorted(files):
+        try:
+            t = 0
+            note_found = False
+            discard = False
+            mpb_i = None
+            mid_temp = MidiFile(os.path.join(test_path, f), clip=True)
+            notes = {
+                n: {'start': [], 'end': [], 'velocity': []}
+                for n in range(128)
+            }
+            for track in mid_temp.tracks:
+                for msg in track:
+                    if not msg.is_meta:
+                        if msg.type == 'note_on':
+                            if note_found:
+                                t += msg.time
+                            else:
+                                t = 0
+                                note_found = True
+                            if msg.velocity > 0:
+                                notes[msg.note]['start'].append(t // mid_temp.ticks_per_beat)
+                                notes[msg.note]['velocity'].append(msg.velocity)
+                            else:
+                                notes[msg.note]['end'].append(t // mid_temp.ticks_per_beat)
+                        if msg.type == 'note_off':
+                            t += msg.time
+                            notes[msg.note]['end'].append(t // mid_temp.ticks_per_beat)
+                    else:
+                        if msg.type == 'set_tempo':
+                            if mpb_i is None:
+                                mpb_i = msg.tempo
+                            else:
+                                discard = True
+                        elif msg.type == 'time_signature':
+                            if msg.numerator != 4 and  msg.denominator != 4:
+                                badsignatures += 1
+                                # print(msg)
+
+            if not discard:
+                f_files.append(f) 
+                tpb.append(mid_temp.ticks_per_beat)
+                mpb.append(mpb_i)
+                piano_roll = np.zeros((128, t // mid_temp.ticks_per_beat))
+                for n, events in notes.items():
+                    if len(events['start']) > 0:
+                        for n_ini, n_end, v in zip(events['start'], events['end'], events['velocity']):
+                            piano_roll[n, n_ini:n_end] = v / 127
+                rolls.append(piano_roll)
+        except EOFError:
+            pass
+    print('There were {:d} rolls with non-4/4 signatures'.format(badsignatures))
+    print('{:d} rolls were loaded from {:d} files'.format(len(rolls), len(files)))
+    return rolls, tpb

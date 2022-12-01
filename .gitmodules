@@ -1,0 +1,3 @@
+[submodule "MuseMorphose"]
+	path = MuseMorphose
+	url = https://github.com/brendanjohnharris/MuseMorphose
