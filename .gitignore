@@ -98,3 +98,5 @@ samples/music/*
 samples/dataset.pt
 weights
 **.mid
+!test_song.mid
+!test_song.mp3

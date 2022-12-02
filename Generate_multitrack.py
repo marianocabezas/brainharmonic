@@ -50,7 +50,8 @@ def get_spectrum_spread(signal):
     return spread
 
 def map_three_channels(X):
-    midi_channels = [1, 5, 9]
+    midi_channels = [43, 2, 74]
+    midi_channels = [m - 1 for m in midi_channels]
     spreads = [get_spectrum_spread(x) for x in X]
     inds = np.argsort(spreads)
     return [midi_channels[i] for i in inds]
