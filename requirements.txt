@@ -15,3 +15,5 @@ scikit-learn
 scipy
 torch>=1.6.0
 tqdm
+wget
+pyts

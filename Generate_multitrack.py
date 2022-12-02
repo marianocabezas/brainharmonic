@@ -21,6 +21,13 @@ import copy
 from mido import Message, MidiFile, MidiTrack
 from scipy import signal
 
+from scipy.ndimage import uniform_filter1d, sobel, prewitt, fourier_gaussian, fourier_shift
+from scipy.cluster.hierarchy import dendrogram, linkage
+from sklearn.cluster import AgglomerativeClustering
+from pyts.decomposition import SingularSpectrumAnalysis # SSA for timeseries
+import heapq # used in the sort of the n-largest index of a vector
+    
+
 #ranking of different midi channel (instruments)'s timbre
 timbre_ranking = np.array([[1,73],
                            [2,19],
@@ -34,12 +41,20 @@ timbre_ranking = np.array([[1,73],
 
 
 def get_spectrum_spread(signal):
+    signal = signal - np.mean(signal)
+    signal = signal / np.std(signal)
     f = abs(np.fft.fft(signal))
     spectrum = f.real * f.real + f.imag * f.imag
     nspectrum = spectrum / spectrum[0]
     spread = np.std(nspectrum)
     return spread
 
+def map_three_channels(X):
+    midi_channels = [43, 2, 74]
+    midi_channels = [m - 1 for m in midi_channels]
+    spreads = [get_spectrum_spread(x) for x in X]
+    inds = np.argsort(spreads)
+    return [midi_channels[i] for i in inds]
 
 def map_eeg_channel_signal_to_midi_channel(eeg_channel_signal,eeg_global_signal):
     channel_spectrum_spread = get_spectrum_spread(eeg_channel_signal)
@@ -143,9 +158,11 @@ def create_multitrack(song,global_signal,first_signal, second_signal, third_sign
                       transpose_up=True, transpose_down=True, add_delay=True,
                       add_skipped_notes=True, add_special_effect=False, change_track_velocity=False):
 
-    first_signal_instrument = map_eeg_channel_signal_to_midi_channel(first_signal,global_signal)
-    second_signal_instrument = map_eeg_channel_signal_to_midi_channel(second_signal, global_signal)
-    third_signal_instrument = map_eeg_channel_signal_to_midi_channel(third_signal, global_signal)
+    # first_signal_instrument = map_eeg_channel_signal_to_midi_channel(first_signal,global_signal)
+    # second_signal_instrument = map_eeg_channel_signal_to_midi_channel(second_signal, global_signal)
+    # third_signal_instrument = map_eeg_channel_signal_to_midi_channel(third_signal, global_signal)
+    instruments = map_three_channels([first_signal, second_signal, third_signal])
+    first_signal_instrument, second_signal_instrument, third_signal_instrument = instruments
 
     if first_signal_instrument == second_signal_instrument:
         # convert second signal to a different instrument
@@ -190,7 +207,7 @@ def create_multitrack(song,global_signal,first_signal, second_signal, third_sign
         skipped_notes_track = add_skipped_notes_track(song, number_notes_skipped=5, new_instrument=6, new_channel=channel+1)
         channel += 1
         song.tracks.append(skipped_notes_track)
-
+    print(song)
     if add_special_effect:
         random_number = random.randint(0,9)
         if random_number%2 == 0:
@@ -198,17 +215,84 @@ def create_multitrack(song,global_signal,first_signal, second_signal, third_sign
         else:
             add_special_effects(song,127,channel)
 
-    return(song)
+    return song
 
-# Tested some functions
-path = "samples/music/"
-mid = MidiFile(path+'35064.mid', clip=True)
-transposed_track = transpose_song(mid,transpose_steps=12,new_instrument=42,new_channel=1)
-delayed_track = add_delayed_track(mid,delay_time=3,new_instrument=0,new_channel=2)
-skipped_notes_track = add_skipped_notes_track(mid,number_notes_skipped=5,new_instrument=6,new_channel=3)
-mid.tracks.append(transposed_track)
-mid.tracks.append(delayed_track)
-mid.tracks.append(skipped_notes_track)
-output_path = "outputs/"
-mid.save(output_path+"35064_added_3.mid")
+# # Tested some functions
+# path = "samples/music/"
+# mid = MidiFile(path+'35064.mid', clip=True)
+# transposed_track = transpose_song(mid,transpose_steps=12,new_instrument=42,new_channel=1)
+# delayed_track = add_delayed_track(mid,delay_time=3,new_instrument=0,new_channel=2)
+# skipped_notes_track = add_skipped_notes_track(mid,number_notes_skipped=5,new_instrument=6,new_channel=3)
+# mid.tracks.append(transposed_track)
+# mid.tracks.append(delayed_track)
+# mid.tracks.append(skipped_notes_track)
+# output_path = "outputs/"
+# mid.save(output_path+"35064_added_3.mid")
 
+
+
+
+def three_dominant_components(X):
+    #input X is the EEG timeseries from one subject
+    #return three_channels,TSeriesMatrix[three_channels] 
+    #return to the No. of the three dominant channels and the main component of the three dominant channels 
+    
+    # We decompose the time series into three subseries
+    
+    ## obtain the main part of each channel
+    #using the first component of SSA.
+    window_size = 15
+    groups = [np.arange(i, i + 5) for i in range(0, 11, 5)]
+
+    # Singular Spectrum Analysis
+    ssa = SingularSpectrumAnalysis(window_size=15, groups=groups)
+    X_ssa = ssa.fit_transform(X)
+
+    TSeriesMatrix=np.zeros([X.shape[0],X.shape[1]])
+
+    for i in range(X.shape[0]):
+        TSeriesMatrix[i,:]=X_ssa[i,1]
+    ### 1.divided the channel into three parts——by Hierarchical Clustering
+    hierarchical_cluster = AgglomerativeClustering(n_clusters=3, affinity='euclidean', linkage='ward')
+    channels=range(X.shape[0])
+    labels = hierarchical_cluster.fit_predict(TSeriesMatrix) 
+    channels_classify = list(zip(channels, labels))
+
+
+    ### 2.give the most important channel in each class: 
+    ### shows the most important channel for each class
+    ###give a score of the channel for each class
+    ### give a sort of the channel/brain region
+    ### define the most important channel as most corr with each channel
+    ### for channel i, add the correlation between timeseries xi and xj (j does not equal i) 
+    class1_channel=np.where(labels==0)
+    class2_channel=np.where(labels==1)
+    class3_channel=np.where(labels==2)
+    
+    Timeseries_class1=TSeriesMatrix[class1_channel[0],:]
+    Timeseries_class2=TSeriesMatrix[class2_channel[0],:]
+    Timeseries_class3=TSeriesMatrix[class3_channel[0],:]
+
+    FCM_class1 = np.corrcoef(Timeseries_class1)
+    FCM_class2 = np.corrcoef(Timeseries_class2)
+    FCM_class3 = np.corrcoef(Timeseries_class3)
+
+    FCM_1 = FCM_class1
+    FCM_2 = FCM_class2
+    FCM_3 = FCM_class3
+    
+    corr_sum1=sum(np.nan_to_num(FCM_class1),1)
+    main_channel=np.where(corr_sum1==np.max(corr_sum1))
+    main_channel1=class1_channel[0][main_channel]
+
+    corr_sum2=sum(np.nan_to_num(FCM_class2),1)
+    main_channel=np.where(corr_sum2==np.max(corr_sum2))
+    main_channel2=class2_channel[0][main_channel]
+    
+    corr_sum3=sum(np.nan_to_num(FCM_class3),1)
+    main_channel=np.where(corr_sum3==np.max(corr_sum3))
+    main_channel3=class3_channel[0][main_channel]
+
+    three_channels=[main_channel1[0],main_channel2[0],main_channel3[0]]
+    return three_channels,X[three_channels]
+    

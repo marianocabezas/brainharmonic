@@ -120,3 +120,4 @@ class Note(object):
                             note=self.parsed_note,
                             velocity=self.velocity,
                             time=self.time + self.tick_length)
+
